@@ -31,16 +31,21 @@ services:
       - proxy
 
   support:
-    image: php:8.3-apache
+    build: ./support
     restart: unless-stopped
     volumes:
       - ./support:/var/www/html:ro
+    depends_on:
+      mariadb:
+        condition: service_healthy
     labels:
       - traefik.enable=true
+      - traefik.docker.network=proxy
       - traefik.http.routers.support.rule=Host(`support.localhost`)
       - traefik.http.services.support.loadbalancer.server.port=80
     networks:
       - proxy
+      - backend
 
   elearn:
     build: ./elearn
@@ -76,6 +81,7 @@ services:
       MARIADB_PASSWORD: ${DB_PASSWORD}
     volumes:
       - db_data:/var/lib/mysql
+      - ./mariadb/initSupport.sql:/docker-entrypoint-initdb.d/initSupport.sql:ro
     healthcheck:
       test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
       interval: 10s

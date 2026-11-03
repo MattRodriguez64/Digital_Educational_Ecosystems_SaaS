@@ -1,131 +1,568 @@
 <?php
-declare(strict_types=1);
-session_start();
 
-$dataDir = __DIR__ . '/data';
-$dataFile = $dataDir . '/tickets.json';
-$errors = [];
+// en attendant de voir pour l'authent
+$est_admin = true;
+$utilisateur = 'admin';
+$universite = 'Université de Pau -UPPA';
+//
 
-function h(string $value): string { return htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); }
-function readTickets(string $path): array {
-    if (!is_file($path)) return [];
-    $decoded = json_decode((string) file_get_contents($path), true);
-    return is_array($decoded) ? array_values(array_filter($decoded, 'is_array')) : [];
+$pdo = new PDO('mysql:host=mariadb;dbname=support;charset=utf8mb4', 'support', 'support');
+$pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+
+$action = $_GET['action'] ?? '';
+
+if ($est_admin && $action === 'pdf') {
+    require __DIR__ . '/fpdf/fpdf.php';
+
+    function compter($pdo, $colonne, $where, $params)
+    {
+        $stmt = $pdo->prepare("SELECT $colonne AS cle, COUNT(*) AS nb FROM tickets $where GROUP BY $colonne");
+        $stmt->execute($params);
+
+        $resultat = [];
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $ligne) {
+            $resultat[$ligne['cle']] = $ligne['nb'];
+        }
+        return $resultat;
+    }
+
+    function latin($texte)
+    {
+        return mb_convert_encoding((string) $texte, 'ISO-8859-1', 'UTF-8');
+    }
+
+    function section($pdf, $titre, $lignes)
+    {
+        $pdf->SetFont('Helvetica', 'B', 13);
+        $pdf->Cell(0, 9, latin($titre), 0, 1);
+        $pdf->SetFont('Helvetica', '', 11);
+        foreach ($lignes as $libelle => $nombre) {
+            $pdf->Cell(90, 7, latin($libelle), 1);
+            $pdf->Cell(30, 7, $nombre, 1, 1, 'R');
+        }
+        $pdf->Ln(5);
+    }
+
+
+    $uni = $_GET['universite'] ?? '';
+    $where = '';
+    $params = [];
+    if ($uni !== '') {
+        $where = 'WHERE university = ?';
+        $params[] = $uni;
+    }
+
+    
+    $st = compter($pdo, 'status', $where, $params);
+    $pr = compter($pdo, 'priority', $where, $params);
+    $ca = compter($pdo, 'category', $where, $params);
+
+    $stmt = $pdo->prepare("SELECT * FROM tickets $where ORDER BY created_at DESC");
+    $stmt->execute($params);
+    $tickets = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    $pdf = new FPDF();
+    $pdf->AddPage();
+
+    $pdf->SetFont('Helvetica', 'B', 20);
+    $pdf->Cell(0, 12, latin('Rapport de support'), 0, 1);
+    $pdf->SetFont('Helvetica', '', 11);
+    $pdf->Cell(0, 7, latin('Périmètre : ' . ($uni !== '' ? $uni : 'Global')), 0, 1);
+    $pdf->Cell(0, 7, latin('Généré le ' . date('d/m/Y à H:i') . ' par ' . $utilisateur), 0, 1);
+    $pdf->Ln(6);
+
+    section($pdf, 'Synthèse', [
+        'Total des tickets' => array_sum($st),
+        'Ouverts' => $st[0] ?? 0,
+        'En cours' => $st[1] ?? 0,
+        'Clôturés' => $st[2] ?? 0,
+    ]);
+    section($pdf, 'Par priorité', [
+        'Haute' => $pr['Haute'] ?? 0,
+        'Moyenne' => $pr['Moyenne'] ?? 0,
+        'Basse' => $pr['Basse'] ?? 0,
+    ]);
+    section($pdf, 'Par catégorie', $ca);
+
+    if ($uni === '') {
+        $pu = [];
+        foreach (compter($pdo, 'university', $where, $params) as $nom => $nombre) {
+            $pu[$nom !== '' ? $nom : 'Non renseignée'] = $nombre;
+        }
+        section($pdf, 'Par université', $pu);
+    }
+
+    $pdf->SetFont('Helvetica', 'B', 13);
+    $pdf->Cell(0, 9, latin('Liste des tickets'), 0, 1);
+    $pdf->SetFont('Helvetica', 'B', 10);
+    $pdf->Cell(24, 7, 'Date', 1);
+    $pdf->Cell(76, 7, 'Titre', 1);
+    $pdf->Cell(36, 7, 'Utilisateur', 1);
+    $pdf->Cell(24, 7, latin('Priorité'), 1);
+    $pdf->Cell(30, 7, 'Statut', 1, 1);
+
+    $ls = ['Ouvert', 'En cours', 'Clôturé'];
+    $pdf->SetFont('Helvetica', '', 10);
+    foreach ($tickets as $t) {
+        $pdf->Cell(24, 7, substr($t['created_at'], 0, 10), 1);
+        $pdf->Cell(76, 7, latin(mb_strimwidth($t['title'], 0, 42, '...')), 1);
+        $pdf->Cell(36, 7, latin(mb_strimwidth($t['created_by'], 0, 18, '...')), 1);
+        $pdf->Cell(24, 7, latin($t['priority']), 1);
+        $pdf->Cell(30, 7, latin($ls[$t['status']]), 1, 1);
+    }
+
+    $pdf->Output('I', 'rapport-support.pdf');
+    exit;
 }
-function badgeClass(string $value): string {
-    return match ($value) {
-        'Ouvert', 'Haute' => 'red',
-        'En cours', 'Moyenne' => 'amber',
-        'Résolu', 'Basse' => 'green',
-        default => 'gray'
-    };
+
+if ($action) {
+    header('Content-Type: application/json');
+
+    if ($action === 'mes_tickets') {
+        $stmt = $pdo->prepare('SELECT * FROM tickets WHERE created_by = ? ORDER BY created_at DESC');
+        $stmt->execute([$utilisateur]);
+        echo json_encode($stmt->fetchAll(PDO::FETCH_ASSOC));
+    } elseif ($action === 'creer') {
+
+        $titre = trim($_POST['title'] ?? '');
+        $description = trim($_POST['description'] ?? '');
+        if ($titre === '' || $description === '') {
+            echo json_encode(['ok' => false, 'erreur' => 'Le sujet et la description sont obligatoires !']);
+            exit;
+
+        }
+        $stmt = $pdo->prepare('INSERT INTO tickets (uuid, title, category, priority, description, created_by, university) VALUES (UUID(), ?, ?, ?, ?, ?, ?)');
+        $stmt->execute([$titre, $_POST['category'], $_POST['priority'], $description, $utilisateur, $universite]);
+        echo json_encode(['ok' => true]);
+
+    } elseif ($est_admin && $action === 'filtres') {
+        echo json_encode([
+            'users' => $pdo->query('SELECT DISTINCT created_by FROM tickets ORDER BY created_by')->fetchAll(PDO::FETCH_COLUMN),
+            'universites' => $pdo->query('SELECT DISTINCT university FROM tickets WHERE university IS NOT NULL ORDER BY university')->fetchAll(PDO::FETCH_COLUMN),
+        ]);
+    } elseif ($est_admin && $action === 'tous') {
+        $sql = 'SELECT * FROM tickets WHERE 1 = 1';
+        $params = [];
+        if (!empty($_GET['date'])) {
+            $sql .= ' AND DATE(created_at) = ?';
+            $params[] = $_GET['date'];
+        }
+
+        if (!empty($_GET['user'])) {
+            $sql .= ' AND created_by = ?';
+            $params[] = $_GET['user'];
+        }
+
+        if (!empty($_GET['universite'])) {
+            $sql .= ' AND university = ?';
+            $params[] = $_GET['universite'];
+        }
+        $stmt = $pdo->prepare($sql . ' ORDER BY status = 2, created_at DESC');
+        $stmt->execute($params);
+
+        echo json_encode($stmt->fetchAll(PDO::FETCH_ASSOC));
+    } elseif ($est_admin && $action === 'prendre') {
+        $stmt = $pdo->prepare('UPDATE tickets SET status = 1, handled_by = ? WHERE uuid = ? AND status IN (0, 1)');
+        $stmt->execute([$utilisateur, $_POST['uuid']]);
+
+        echo json_encode(['ok' => true]);
+    } elseif ($est_admin && $action === 'traiter') {
+        $stmt = $pdo->prepare('SELECT status, handled_by FROM tickets WHERE uuid = ?');
+        $stmt->execute([$_POST['uuid']]);
+        $ticket = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$ticket || $ticket['status'] != 1 || $ticket['handled_by'] !== $utilisateur) {
+            echo json_encode(['ok' => false, 'erreur' => 'Ce ticket n\'est pas pris en charge par vous!.']);
+            exit;
+        }
+
+        $solution = trim($_POST['solution'] ?? '');
+        $status = (int) $_POST['status'] === 2 ? 2 : 1;
+        if ($status === 2 && $solution === '') {
+            echo json_encode(['ok' => false, 'erreur' => 'Une solution est obligatoire pour clôturer.']);
+            exit;
+        }
+        $stmt = $pdo->prepare('UPDATE tickets SET solution = ?, status = ? WHERE uuid = ?');
+        $stmt->execute([$solution, $status, $_POST['uuid']]);
+
+        echo json_encode(['ok' => true]);
+    } else {
+        http_response_code(403);
+        echo json_encode(['ok' => false]);
+    }
+    exit;
 }
+?>
+<!DOCTYPE html>
+<html lang="fr">
 
-if (empty($_SESSION['csrf_token'])) $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
-$tickets = readTickets($dataFile);
-$old = ['title' => '', 'category' => 'Technique', 'priority' => 'Moyenne', 'description' => ''];
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Support</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/css/bootstrap.min.css">
+</head>
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $old = [
-        'title' => trim((string)($_POST['title'] ?? '')),
-        'category' => (string)($_POST['category'] ?? ''),
-        'priority' => (string)($_POST['priority'] ?? ''),
-        'description' => trim((string)($_POST['description'] ?? '')),
-    ];
-    if (!hash_equals((string)$_SESSION['csrf_token'], (string)($_POST['csrf_token'] ?? ''))) $errors[] = 'Session expirée : actualisez la page.';
-    if (mb_strlen($old['title']) < 4 || mb_strlen($old['title']) > 120) $errors[] = 'Le titre doit contenir entre 4 et 120 caractères.';
-    if (mb_strlen($old['description']) < 10 || mb_strlen($old['description']) > 3000) $errors[] = 'La description doit contenir entre 10 et 3 000 caractères.';
-    if (!in_array($old['category'], ['Technique', 'Compte', 'Facturation', 'Autre'], true)) $errors[] = 'Catégorie invalide.';
-    if (!in_array($old['priority'], ['Basse', 'Moyenne', 'Haute'], true)) $errors[] = 'Priorité invalide.';
+<body>
+    <nav class="navbar navbar-dark bg-dark">
+        <span class="navbar-brand">Support</span>
+        <div class="d-flex align-items-center">
+            <a href="sla.php" class="btn btn-outline-light btn-sm mr-3" id="btn-sla">SLA</a>
+            <a href="http://localhost" class="navbar-text"><?= htmlspecialchars($utilisateur . ($est_admin ? ' (admin)' : '')) ?></a>
+        </div>
+    </nav>
 
-    if (!$errors) {
-        if (!is_dir($dataDir) && !mkdir($dataDir, 0700, true) && !is_dir($dataDir)) {
-            $errors[] = 'Impossible de créer le dossier de stockage.';
-        } else {
-            // Verrouillage pour éviter de perdre des tickets lors de soumissions simultanées.
-            $handle = fopen($dataFile, 'c+');
-            if (!$handle || !flock($handle, LOCK_EX)) {
-                $errors[] = 'Impossible de sauvegarder le ticket.';
-            } else {
-                rewind($handle);
-                $content = stream_get_contents($handle);
-                $current = $content ? json_decode($content, true) : [];
-                if (!is_array($current)) $current = [];
-                $current[] = [
-                    'id' => strtoupper(substr(bin2hex(random_bytes(5)), 0, 8)),
-                    'title' => $old['title'],
-                    'category' => $old['category'],
-                    'priority' => $old['priority'],
-                    'description' => $old['description'],
-                    'status' => 'Ouvert',
-                    'created_at' => date('Y-m-d H:i:s'),
-                ];
-                $json = json_encode($current, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
-                rewind($handle);
-                if ($json === false || !ftruncate($handle, 0) || fwrite($handle, $json) === false || !fflush($handle)) {
-                    $errors[] = 'Erreur lors de l’écriture du ticket.';
-                }
-                flock($handle, LOCK_UN);
+    <div class="container my-4">
+        <div class="row">
+            <div class="col-md-5 mb-3">
+                <div class="card bg-secondary text-white">
+                    <div class="card-body">
+                        <h5 class="card-title">Nouveau ticket</h5>
+                        <form id="formulaire">
+                            <div class="form-group">
+                                <label>Sujet</label>
+                                <input class="form-control" name="title" maxlength="120" required>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group col-6">
+                                    <label>Catégorie</label>
+                                    <select class="form-control" name="category">
+                                        <option>Technique</option>
+                                        <option>Compte</option>
+                                        <option>Autre</option>
+                                    </select>
+                                </div>
+                                <div class="form-group col-6">
+                                    <label>Priorité</label>
+                                    <select class="form-control" name="priority">
+                                        <option>Basse</option>
+                                        <option>Moyenne</option>
+                                        <option>Haute</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label>Description</label>
+                                <textarea class="form-control" name="description" rows="6" required></textarea>
+                            </div>
+                            <p class="text-warning" id="message"></p>
+                            <button class="btn btn-primary btn-block">Envoyer</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-7 mb-3">
+                <div class="card bg-secondary text-white">
+                    <div class="card-body">
+                        <h5 class="card-title">Mes tickets</h5>
+                        <div class="list-group" id="liste"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <?php if ($est_admin) { ?>
+            <div class="card bg-secondary text-white mt-3">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <h5 class="card-title">Gestion des tickets</h5>
+                        <button class="btn btn-light btn-sm mb-2" data-toggle="modal" data-target="#modal-stats">Statistiques</button>
+                    </div>
+                    <div class="form-row mb-3">
+                        <div class="col-md-3">
+                            <label>Date</label>
+                            <input type="date" class="form-control" id="filtre-date" value="<?= date('Y-m-d') ?>">
+                        </div>
+                        <div class="col-md-4">
+                            <label>Utilisateur</label>
+                            <select class="form-control" id="filtre-user">
+                                <option value="">Tous</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label>Université</label>
+                            <select class="form-control" id="filtre-universite">
+                                <option value="">Toutes</option>
+                            </select>
+                        </div>
+                        <div class="col-md-1 d-flex align-items-end">
+                            <button class="btn btn-secondary btn-block" id="filtre-reset">Reset</button>
+                        </div>
+                    </div>
+                    <p class="text-white-50" id="compteur"></p>
+                    <div id="liste-admin"></div>
+                </div>
+            </div>
+
+            <div class="modal fade" id="modal-stats" tabindex="-1">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header bg-secondary text-white">
+                            <h5 class="modal-title">Statistiques</h5>
+                            <button class="close text-white" data-dismiss="modal">&times;</button>
+                        </div>
+                        <div class="modal-body">
+                            <label>Périmètre du rapport</label>
+                            <select class="form-control" id="pdf-universite">
+                                <option value="">Global</option>
+                            </select>
+                        </div>
+                        <div class="modal-footer">
+                            <button class="btn btn-dark" data-dismiss="modal">Fermer</button>
+                            <button class="btn btn-primary" onclick="genererPdf()">Générer le PDF</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        <?php } ?>
+    </div>
+
+    <div class="modal fade" id="modal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-secondary text-white">
+                    <h5 class="modal-title" id="modal-titre"></h5>
+                    <button class="close text-white" data-dismiss="modal">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <span class="badge" id="modal-statut"></span>
+                    <small class="d-block text-muted my-2" id="modal-infos"></small>
+                    <p id="modal-description" style="white-space: pre-wrap"></p>
+                    <div class="alert alert-success" id="modal-solution" style="white-space: pre-wrap"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="toasts" style="position: fixed; top: 70px; right: 20px; z-index: 1080"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.slim.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const estAdmin = <?= $est_admin ? 'true' : 'false' ?>;
+        const utilisateur = <?= json_encode($utilisateur) ?>;
+        const statuts = ['Ouvert', 'En cours', 'Clôturé'];
+        const couleurs = ['badge-danger', 'badge-warning', 'badge-success'];
+        let mesTickets = [];
+        let tousTickets = [];
+
+        function esc(texte) {
+            const div = document.createElement('div');
+            div.textContent = texte ?? '';
+            return div.innerHTML;
+        }
+
+        function toast(message, couleur = 'bg-danger') {
+            const div = document.createElement('div');
+            div.className = 'toast text-white ' + couleur;
+            div.setAttribute('role', 'alert');
+            div.dataset.delay = 4000;
+            div.innerHTML = `<div class="toast-body">${esc(message)}</div>`;
+
+            document.getElementById('toasts').appendChild(div);
+            $(div).on('hidden.bs.toast', () => div.remove());
+            
+            $(div).toast('show');
+        }
+
+        function badge(s) {
+            return `<span class="badge ${couleurs[s]}">${statuts[s]}</span>`;
+        }
+
+        function afficherMesTickets() {
+            const liste = document.getElementById('liste');
+            if (!mesTickets.length) {
+
+                liste.innerHTML = '<p class="text-white-50">Aucun ticket pour le moment.</p>';
+                return;
             }
-            if ($handle) fclose($handle);
-            if (!$errors) {
-                $_SESSION['flash'] = 'Votre ticket a bien été créé.';
-                header('Location: ' . strtok($_SERVER['REQUEST_URI'], '?'), true, 303);
-                exit;
+            liste.innerHTML = mesTickets.map((t, i) => `
+                <a href="#" class="list-group-item list-group-item-action bg-light text-dark" onclick="ouvrir(${i}); return false;">
+                    <div class="d-flex justify-content-between">
+                        <strong>${esc(t.title)}</strong>
+                        ${badge(t.status)}
+                    </div>
+                    <small>${esc(t.category)} · Priorité ${esc(t.priority)} · ${esc(t.created_at)}</small>
+                </a>`).join('');
+
+        }
+
+        function afficherAdmin() {
+            const liste = document.getElementById('liste-admin');
+            if (!tousTickets.length) {
+                liste.innerHTML = '<p class="text-white-50">Aucun ticket pour ces filtres.</p>';
+                return;
+            }
+
+            liste.innerHTML = tousTickets.map((t, i) => `
+                <div class="card bg-light text-dark mb-3">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between">
+                            <strong>${esc(t.title)}</strong>
+                            ${badge(t.status)}
+                        </div>
+                        <small>${esc(t.category)} · Priorité ${esc(t.priority)} · par ${esc(t.created_by)} (${esc(t.university)}) le ${esc(t.created_at)}</small>
+                        <p class="mt-2" style="white-space: pre-wrap">${esc(t.description)}</p>
+                        ${zoneTraitement(t, i)}
+                    </div>
+                </div>`).join('');
+        }
+
+        function zoneTraitement(t, i) {
+            if (t.status == 0) {
+                return `<button class="btn btn-primary" onclick="prendre(${i})">Prendre en charge</button>`;
+            }
+
+            if (t.status == 1 && t.handled_by === utilisateur) {
+                return `
+                    <textarea class="form-control mb-2" id="solution-${i}" rows="3" placeholder="Solution">${esc(t.solution)}</textarea>
+                    <button class="btn btn-dark" onclick="traiter(${i}, 1)">Enregistrer</button>
+                    <button class="btn btn-success" onclick="traiter(${i}, 2)">Clôturer</button>`;
+            }
+
+            if (t.status == 1) {
+                return `
+                    <p class="mb-2">Pris en charge par ${esc(t.handled_by)}</p>
+                    <button class="btn btn-warning" onclick="prendre(${i})">Reprendre</button>`;
+            }
+
+            return `<div class="alert alert-success mb-0" style="white-space: pre-wrap">Solution : ${esc(t.solution)}</div>`;
+        }
+
+        function ouvrir(i) {
+            const t = mesTickets[i];
+            document.getElementById('modal-titre').textContent = t.title;
+
+            const etat = document.getElementById('modal-statut');
+            etat.textContent = statuts[t.status];
+            etat.className = 'badge ' + couleurs[t.status];
+
+            document.getElementById('modal-infos').textContent =
+                t.category + ' · Priorité ' + t.priority + ' · ' + t.created_at +
+                (t.handled_by ? ' · Pris en charge par ' + t.handled_by : '');
+
+            document.getElementById('modal-description').textContent = t.description;
+            const solution = document.getElementById('modal-solution');
+            solution.style.display = t.solution ? 'block' : 'none';
+
+            solution.textContent = t.solution ? 'Solution : ' + t.solution : '';
+            $('#modal').modal('show');
+        }
+
+        async function traiter(i, status) {
+            const solution = document.getElementById('solution-' + i).value.trim();
+
+            if (status == 2 && solution === '') {
+                toast('Écris une solution avant de clôturer le ticket.');
+                return;
+            }
+            const d = new FormData();
+
+            d.append('uuid', tousTickets[i].uuid);
+            d.append('status', status);
+            d.append('solution', solution);
+
+            const r = await fetch('?action=traiter', {
+                method: 'POST',
+                body: d
+            });
+            const res = await r.json();
+
+            if (!res.ok) {
+                toast(res.erreur);
+            }
+            charger();
+        }
+
+        async function prendre(i) {
+            const d = new FormData();
+            d.append('uuid', tousTickets[i].uuid);
+
+            await fetch('?action=prendre', {
+                method: 'POST',
+                body: d
+            });
+            charger();
+        }
+
+        function remplir(id, valeurs, libelle) {
+            const select = document.getElementById(id);
+            const courant = select.value;
+            select.innerHTML = `<option value="">${libelle}</option>` + valeurs.map(v => `<option>${esc(v)}</option>`).join('');
+            select.value = courant;
+        }
+
+        async function chargerFiltres() {
+            const r = await fetch('?action=filtres');
+            const filtres = await r.json();
+            remplir('filtre-user', filtres.users, 'Tous');
+            remplir('filtre-universite', filtres.universites, 'Toutes');
+            remplir('pdf-universite', filtres.universites, 'Global');
+        }
+
+        function genererPdf() {
+
+            const universite = document.getElementById('pdf-universite').value;
+            window.open('?action=pdf&universite=' + encodeURIComponent(universite), '_blank');
+        }
+
+        async function chargerAdmin() {
+
+            const params = new URLSearchParams({
+                date: document.getElementById('filtre-date').value,
+                user: document.getElementById('filtre-user').value,
+                universite: document.getElementById('filtre-universite').value
+            });
+            const url = '?action=tous&' + params;
+            const r = await fetch(url);
+            tousTickets = await r.json();
+            document.getElementById('compteur').textContent = tousTickets.length + ' ticket(s)';
+            afficherAdmin();
+        }
+
+        async function charger() {
+
+            const r = await fetch('?action=mes_tickets');
+            mesTickets = await r.json();
+            afficherMesTickets();
+            if (estAdmin) {
+                await chargerFiltres();
+                chargerAdmin();
             }
         }
-    }
-    $tickets = readTickets($dataFile);
-}
 
-$flash = $_SESSION['flash'] ?? null;
-unset($_SESSION['flash']);
-$tickets = array_reverse($tickets);
-$total = count($tickets);
-$open = count(array_filter($tickets, fn($t) => ($t['status'] ?? '') === 'Ouvert'));
-$progress = count(array_filter($tickets, fn($t) => ($t['status'] ?? '') === 'En cours'));
-$resolved = count(array_filter($tickets, fn($t) => ($t['status'] ?? '') === 'Résolu'));
-?>
-<!doctype html>
-<html lang="fr">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>HelpDesk — Centre de support</title>
-<style>
-:root{font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#17233d;background:#f5f7fb}*{box-sizing:border-box}body{margin:0}header{background:#fff;border-bottom:1px solid #e7eaf1}.shell{max-width:1120px;margin:auto;padding:0 24px}.top{display:flex;align-items:center;justify-content:space-between;height:76px}.brand{font-size:21px;font-weight:800;letter-spacing:-.6px}.brand span{color:#5268e9}.navnote{font-size:13px;color:#758098}.avatar{background:#edf0ff;color:#5364d8;padding:10px;border-radius:50%;font-weight:800;margin-left:12px}main{padding-top:38px;padding-bottom:70px}h1{font-size:31px;letter-spacing:-1px;margin:0 0 8px}h2{font-size:19px;margin:0}.subtitle{color:#78849a;margin:0 0 28px}.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:28px}.stat,.panel{background:#fff;border:1px solid #e8ebf2;border-radius:14px;box-shadow:0 5px 20px #1d336708}.stat{padding:20px}.stat small{font-size:13px;color:#78849a}.stat strong{display:block;font-size:29px;margin-top:9px}.layout{display:grid;grid-template-columns:1.45fr 1fr;gap:22px;align-items:start}.panel{padding:24px}.panel-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:22px}.count{color:#6573d8;background:#edf0ff;padding:5px 10px;border-radius:20px;font-size:12px;font-weight:700}.ticket{padding:18px 0;border-bottom:1px solid #eef0f5}.ticket:first-of-type{padding-top:0}.ticket:last-child{border:0;padding-bottom:0}.ticket-top{display:flex;justify-content:space-between;gap:10px}.ticket-title{font-weight:700;font-size:15px;overflow-wrap:anywhere}.meta{color:#8a95a7;font-size:12px;margin-top:7px}.ticket-text{font-size:13px;color:#6e7b92;margin:10px 0 0;white-space:pre-wrap;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}.badges{display:flex;gap:6px;flex-wrap:wrap;margin-top:12px}.badge{font-size:11px;font-weight:700;padding:5px 9px;border-radius:6px}.red{background:#ffeded;color:#c54e50}.amber{background:#fff3dc;color:#a66d13}.green{background:#e7f8ee;color:#268958}.gray{background:#edf0f5;color:#60708a}label{font-size:13px;font-weight:700;display:block;margin:17px 0 7px}input,select,textarea{width:100%;padding:12px 13px;font:inherit;font-size:14px;border:1px solid #dfe4ee;border-radius:9px;background:#fff;color:#253149;outline:none}input:focus,select:focus,textarea:focus{border-color:#6175ed;box-shadow:0 0 0 3px #6175ed1c}textarea{height:127px;resize:vertical}.two{display:grid;grid-template-columns:1fr 1fr;gap:12px}.btn{width:100%;margin-top:19px;padding:13px;background:#5367e8;border:0;border-radius:9px;color:#fff;font-size:14px;font-weight:750;cursor:pointer}.btn:hover{background:#4055d6}.notice{border-radius:10px;padding:13px 16px;margin-bottom:17px;font-size:14px}.success{background:#e9f8ee;color:#23794e}.error{background:#ffeded;color:#a93535}.empty{text-align:center;padding:45px 10px;color:#8994a7}.empty strong{display:block;color:#46536c;margin-bottom:6px}.foot{font-size:12px;color:#9ba5b5;margin-top:25px;text-align:center}@media(max-width:800px){.stats{grid-template-columns:repeat(2,1fr)}.layout{grid-template-columns:1fr}h1{font-size:26px}}@media(max-width:450px){.stats{gap:9px}.stat{padding:16px}.two{grid-template-columns:1fr}.shell{padding:0 14px}.panel{padding:18px}.navnote{display:none}}
-</style>
-</head>
-<body>
-<header><div class="shell top"><div class="brand">◈ Help<span>Desk</span></div><div><span class="navnote">Centre d'assistance</span><span class="avatar">HD</span></div></div></header>
-<main class="shell">
-<h1>Centre de support</h1><p class="subtitle">Créez une demande et retrouvez l'ensemble de vos tickets.</p>
-<?php if ($flash): ?><div class="notice success" role="status"><?= h((string)$flash) ?></div><?php endif; ?>
-<?php if ($errors): ?><div class="notice error" role="alert"><?= implode('<br>', array_map('h', $errors)) ?></div><?php endif; ?>
-<section class="stats" aria-label="Statistiques des tickets">
-<div class="stat"><small>Total des tickets</small><strong><?= $total ?></strong></div>
-<div class="stat"><small>Tickets ouverts</small><strong><?= $open ?></strong></div>
-<div class="stat"><small>En cours</small><strong><?= $progress ?></strong></div>
-<div class="stat"><small>Tickets résolus</small><strong><?= $resolved ?></strong></div>
-</section>
-<div class="layout">
-<section class="panel"><div class="panel-head"><h2>Mes tickets</h2><span class="count"><?= $total ?> ticket<?= $total > 1 ? 's' : '' ?></span></div>
-<?php if (!$tickets): ?><div class="empty"><strong>Aucun ticket pour le moment</strong>Votre première demande apparaîtra ici.</div><?php endif; ?>
-<?php foreach ($tickets as $ticket): ?>
-<article class="ticket"><div class="ticket-top"><div class="ticket-title"><?= h((string)($ticket['title'] ?? 'Sans titre')) ?></div><span class="badge <?= badgeClass((string)($ticket['status'] ?? '')) ?>"><?= h((string)($ticket['status'] ?? 'Inconnu')) ?></span></div>
-<div class="meta">#<?= h((string)($ticket['id'] ?? '')) ?> · <?= h((string)($ticket['created_at'] ?? '')) ?></div>
-<p class="ticket-text"><?= h((string)($ticket['description'] ?? '')) ?></p>
-<div class="badges"><span class="badge gray"><?= h((string)($ticket['category'] ?? 'Autre')) ?></span><span class="badge <?= badgeClass((string)($ticket['priority'] ?? '')) ?>">Priorité <?= h((string)($ticket['priority'] ?? '')) ?></span></div>
-</article>
-<?php endforeach; ?>
-</section>
-<section class="panel"><div class="panel-head"><h2>Nouveau ticket</h2><span class="count">+ Créer</span></div>
-<form method="post" action=""><input type="hidden" name="csrf_token" value="<?= h((string)$_SESSION['csrf_token']) ?>">
-<label for="title">Sujet de la demande</label><input id="title" name="title" required minlength="4" maxlength="120" placeholder="Ex. : Impossible de me connecter" value="<?= h($old['title']) ?>">
-<div class="two"><div><label for="category">Catégorie</label><select name="category" id="category"><?php foreach (['Technique','Compte','Facturation','Autre'] as $value): ?><option value="<?= h($value) ?>" <?= $old['category'] === $value ? 'selected' : '' ?>><?= h($value) ?></option><?php endforeach; ?></select></div><div><label for="priority">Priorité</label><select name="priority" id="priority"><?php foreach (['Basse','Moyenne','Haute'] as $value): ?><option value="<?= h($value) ?>" <?= $old['priority'] === $value ? 'selected' : '' ?>><?= h($value) ?></option><?php endforeach; ?></select></div></div>
-<label for="description">Description du problème</label><textarea id="description" name="description" required minlength="10" maxlength="3000" placeholder="Décrivez votre problème avec le plus de détails possible..."><?= h($old['description']) ?></textarea>
-<button type="submit" class="btn">Envoyer ma demande →</button></form></section>
-</div><div class="foot">HelpDesk — Portail de support · Démonstration PHP</div>
-</main>
+        if (estAdmin) {
+            
+            ['filtre-date', 'filtre-user', 'filtre-universite'].forEach(id => {
+                document.getElementById(id).addEventListener('change', chargerAdmin);
+            });
+            document.getElementById('filtre-reset').addEventListener('click', () => {
+                document.getElementById('filtre-date').value = new Date().toLocaleDateString('sv-SE');
+                document.getElementById('filtre-user').value = '';
+                document.getElementById('filtre-universite').value = '';
+                chargerAdmin();
+            });
+        }
+
+        document.getElementById('formulaire').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const d = new FormData(e.target);
+            const r = await fetch('?action=creer', {
+                method: 'POST',
+                body: d
+            });
+            const res = await r.json();
+            document.getElementById('message').textContent = res.ok ? '' : res.erreur;
+            if (res.ok) {
+                e.target.reset();
+                charger();
+
+            }
+        });
+
+        charger();
+    </script>
 </body>
+
 </html>
