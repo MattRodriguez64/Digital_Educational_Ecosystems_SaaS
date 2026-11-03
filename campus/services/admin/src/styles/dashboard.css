@@ -1,0 +1,448 @@
+/* Couleurs et typographie communes aux écrans d’administration. */
+:root {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    color: #1c3034;
+    background: #f4f7f6;
+    --ink: #123b38;
+    --muted: #526968;
+    --line: #d9e4df;
+}
+* {
+    box-sizing: border-box;
+}
+body {
+    margin: 0;
+    display: grid;
+    grid-template-columns: 225px minmax(0, 1fr);
+    min-height: 100vh;
+}
+[hidden] {
+    display: none !important;
+}
+aside {
+    background: #102f30;
+    color: white;
+    padding: 34px 18px;
+    display: flex;
+    flex-direction: column;
+}
+.brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-weight: 700;
+    font-size: 27px;
+    letter-spacing: -1px;
+}
+.mark {
+    background: #c2efb3;
+    color: #153f38;
+    padding: 2px 9px;
+    border-radius: 10px;
+}
+.nav-label,
+small {
+    font-size: 11px;
+    font-weight: 750;
+    letter-spacing: 0.12em;
+}
+.nav-label {
+    margin: 54px 12px 14px;
+    color: #a9c3bb;
+}
+nav a {
+    display: flex;
+    align-items: center;
+    gap: 13px;
+    color: #d2e3de;
+    text-decoration: none;
+    padding: 12px;
+    border-radius: 8px;
+}
+nav a:hover,
+nav a[aria-current] {
+    background: #24504b;
+    color: white;
+}
+nav a span {
+    width: 20px;
+    text-align: center;
+    font-size: 20px;
+}
+footer {
+    margin-top: auto;
+    padding: 28px 5px 0;
+    font-size: 13px;
+    color: #c4d8d2;
+}
+footer i {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #a6dfa5;
+}
+main {
+    width: 100%;
+    max-width: 1500px;
+    margin: 0 auto;
+    padding: 0 clamp(18px, 4vw, 70px) 36px;
+}
+header,
+.panel-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+}
+header {
+    min-height: 78px;
+    font-size: 14px;
+}
+header em {
+    margin: 0 8px;
+    color: #829692;
+}
+.account {
+    border: 1px solid var(--line);
+    border-radius: 24px;
+    background: white;
+    padding: 7px 14px;
+}
+.hero {
+    position: relative;
+    overflow: hidden;
+    background: linear-gradient(110deg, #194743, #246352);
+    color: white;
+    padding: clamp(24px, 4vw, 48px);
+    border-radius: 18px;
+}
+.hero-copy {
+    position: relative;
+    z-index: 1;
+    max-width: 72%;
+}
+.hero small {
+    color: #c3edbc;
+}
+h1,
+h2,
+p {
+    margin: 0;
+}
+h1 {
+    margin: 10px 0;
+    font-size: clamp(29px, 3.6vw, 49px);
+    line-height: 1.08;
+    letter-spacing: -0.045em;
+}
+.hero p {
+    color: #deeee7;
+}
+.campus {
+    position: absolute;
+    right: 2%;
+    top: 7%;
+    width: 28%;
+    height: 88%;
+    color: #95cda8;
+    opacity: 0.65;
+}
+button,
+input {
+    font: inherit;
+}
+button,
+.button {
+    cursor: pointer;
+    border-radius: 8px;
+    border: 1px solid var(--line);
+    padding: 9px 15px;
+    background: white;
+    color: var(--ink);
+    font-weight: 650;
+}
+.button {
+    display: inline-block;
+    margin-top: 22px;
+    background: #c8f1b8;
+    border-color: transparent;
+    text-decoration: none;
+}
+button:hover,
+.button:hover {
+    filter: brightness(0.95);
+}
+:focus-visible {
+    outline: 3px solid #4c98d4;
+    outline-offset: 3px;
+}
+/* Sur grand écran, les trois indicateurs occupent chacun une colonne. */
+.metrics {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+    margin: 20px 0;
+}
+article,
+.panel {
+    background: white;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+}
+article {
+    display: grid;
+    gap: 5px;
+    padding: 20px;
+}
+article small {
+    letter-spacing: normal;
+    font-size: 15px;
+}
+article strong {
+    font-size: 38px;
+    line-height: 1.2;
+    font-variant-numeric: tabular-nums;
+}
+article span,
+#sync,
+#empty,
+#slug-help {
+    color: var(--muted);
+    font-size: 13px;
+}
+.panel {
+    padding: clamp(16px, 2.6vw, 32px);
+}
+.panel small {
+    color: #417567;
+}
+h2 {
+    font-size: 24px;
+    letter-spacing: -0.035em;
+    margin-top: 4px;
+}
+#sync,
+#empty {
+    margin: 14px 0;
+}
+.scroll {
+    overflow-x: auto;
+}
+table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+}
+th,
+td {
+    padding: 13px 10px;
+    text-align: left;
+    border-bottom: 1px solid var(--line);
+}
+th {
+    color: var(--muted);
+    background: #f4f8f5;
+    font-size: 12px;
+}
+td strong,
+td code {
+    display: block;
+}
+td code {
+    color: var(--muted);
+    margin-top: 3px;
+}
+.badge {
+    display: inline-block;
+    border-radius: 16px;
+    background: #edf1f2;
+    color: #48565a;
+    padding: 4px 10px;
+    font-size: 12px;
+    font-weight: 650;
+    white-space: nowrap;
+}
+.active {
+    background: #dcf4e2;
+    color: #216242;
+}
+.partial {
+    background: #fff0ce;
+    color: #79500c;
+}
+.stopped {
+    background: #fbe6de;
+    color: #893f29;
+}
+form,
+#filters {
+    max-width: 34rem;
+    margin-top: 24px;
+}
+label {
+    display: block;
+    font-weight: 650;
+    margin: 16px 0 6px;
+}
+input {
+    display: block;
+    width: 100%;
+    padding: 11px;
+    border: 1px solid #a6bab3;
+    border-radius: 8px;
+}
+#slug-help {
+    display: block;
+    margin-top: 5px;
+}
+.notice {
+    margin-bottom: 15px;
+    padding: 14px;
+    background: #e4efe8;
+    border-radius: 8px;
+}
+/* Sur téléphone, la navigation passe au-dessus du contenu pour garder les chiffres lisibles. */
+@media (max-width: 780px) {
+    body {
+        display: block;
+    }
+    aside {
+        padding: 12px 16px;
+    }
+    .brand {
+        font-size: 21px;
+    }
+    .nav-label,
+    footer {
+        display: none;
+    }
+    nav {
+        display: flex;
+        flex-wrap: wrap;
+        margin-top: 8px;
+    }
+    nav a {
+        font-size: 14px;
+        padding: 8px;
+        gap: 4px;
+    }
+    header {
+        min-height: 58px;
+    }
+}
+@media (max-width: 540px) {
+    .campus {
+        display: none;
+    }
+    .hero-copy {
+        max-width: none;
+    }
+    .metrics {
+        grid-template-columns: 1fr;
+        gap: 8px;
+    }
+    article {
+        grid-template-columns: 1fr auto;
+        padding: 12px 16px;
+        align-items: center;
+    }
+    article strong {
+        grid-column: 2;
+        grid-row: 1 / 3;
+    }
+}
+/* Les filtres restent utilisables au clavier et se replient sur un écran étroit. */
+.usage-controls,
+.usage-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+}
+.usage-controls label {
+    display: grid;
+    gap: 6px;
+}
+.usage-controls select {
+    font: inherit;
+    background: white;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 9px;
+}
+.usage-links {
+    margin: 0 0 26px;
+}
+.usage-links .button {
+    margin-top: 12px;
+}
+.usage-note,
+#usage-status {
+    color: var(--muted);
+    font-size: 13px;
+    margin: 12px 0;
+}
+/* Espacement des formulaires et de l’aperçu dans l’onglet Facturation. */
+.bill-panel {
+    margin-top: 18px;
+}
+.bill-panel summary {
+    cursor: pointer;
+    font-size: 19px;
+    font-weight: 650;
+}
+.bill-panel h2 + p,
+.bill-panel summary + p,
+.bill-preview p {
+    margin-top: 10px;
+}
+.bill-panel select,
+.bill-panel textarea {
+    width: 100%;
+    font: inherit;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 10px;
+    background: white;
+}
+.bill-preview {
+    background: #f3f8f5;
+    padding: 18px;
+    margin-top: 20px;
+    border-radius: 10px;
+}
+/* La confirmation reste distincte du tableau, même sur un écran étroit. */
+#stack-dialog {
+    max-width: min(30rem, 90vw);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 24px;
+}
+#stack-dialog::backdrop {
+    background: rgb(16 47 48 / 55%);
+}
+#stack-form {
+    margin: 0;
+}
+#stack-description {
+    margin: 14px 0;
+}
+.stack-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+#stack-form .stack-buttons {
+    margin-top: 18px;
+}
+#inventory .stack-buttons {
+    margin-top: 8px;
+}
+#inventory .stack-buttons button {
+    padding: 5px 10px;
+    font-size: 13px;
+}
+#inventory .stack-buttons button:last-child {
+    color: #8a3528;
+    border-color: #d7aaa0;
+}

@@ -1,0 +1,71 @@
+/* Ces styles sont inclus dans le document téléchargé pour que la facture reste lisible hors ligne. */
+body {
+    margin: 0;
+    padding: 5vw;
+    color: #193733;
+    font:
+        16px/1.55 system-ui,
+        sans-serif;
+}
+main {
+    max-width: 850px;
+    margin: auto;
+}
+.brand {
+    letter-spacing: 0.16em;
+    color: #376956;
+    font-size: 12px;
+    font-weight: bold;
+}
+h1 {
+    font-size: 34px;
+}
+h2 {
+    font-size: 15px;
+    color: #47715e;
+}
+.parties {
+    display: flex;
+    gap: 10%;
+    margin: 35px 0;
+}
+.parties section {
+    flex: 1;
+    overflow-wrap: anywhere;
+}
+table {
+    border-collapse: collapse;
+    width: 100%;
+}
+td,
+th {
+    text-align: right;
+    border-bottom: 1px solid #cbdad1;
+    padding: 10px 5px;
+}
+th:first-child,
+td:first-child {
+    text-align: left;
+}
+.total {
+    margin: 25px 0 0 auto;
+    max-width: 300px;
+}
+.total p {
+    display: flex;
+    justify-content: space-between;
+}
+.total p:last-child {
+    border-top: 2px solid #235443;
+    padding-top: 10px;
+}
+/* Les marges d’impression laissent de la place autour du contenu sur une feuille A4. */
+@page {
+    size: A4;
+    margin: 15mm;
+}
+@media print {
+    body {
+        padding: 0;
+    }
+}

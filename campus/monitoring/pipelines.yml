@@ -1,0 +1,6 @@
+# Séparer les journaux Beats existants des relevés et des cumuls de facturation.
+- pipeline.id: main
+  path.config: /usr/share/logstash/pipeline/logstash.conf
+- pipeline.id: campus
+  path.config: /usr/share/logstash/pipeline/campus.conf
+  pipeline.workers: 1

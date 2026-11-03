@@ -1,0 +1,93 @@
+/* :root {
+
+} */
+
+body {
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 16px;
+    padding: 0px;
+    margin: 0px;
+}
+
+.main-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100vw;
+    height: 100vh;
+    background-color: #f5f5f5;
+}
+
+
+.headbar {
+    width: 100vw;
+    height: 100px;
+    background-color: #FFFFFF;
+    margin-bottom: 100px;
+}
+
+.title-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 10px;
+}
+
+.card-container {
+    display: flex;
+    align-items: center;
+    flex-direction: column;
+    justify-content: space-around;
+    background-color: #fff;
+    width: 400px;
+    height: 400px;
+    padding: 40px 20px;
+    border-radius: 20px;
+}
+
+h2 {
+    font-size: 28px;
+    margin: 0px;
+}
+
+.description {
+    color: #D6D3D1;
+    margin-bottom: 30px;
+    text-align: center;
+}
+
+form {
+    width: 100%;
+}
+
+input {
+    border: none;
+    border-radius: 4px;
+    border: 2px solid #F5F5F4;
+    font-size: 16px;
+    width: 100%;
+    margin-bottom: 20px;
+    margin-top: 10px;
+    padding: 8px 0px;
+}
+
+label {
+    font-size: 18px;
+    font-weight: 700;
+}
+
+button {
+    width: 100%;
+    background-color: #74D4FF;
+    font-size: 22px;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    padding: 6px;
+    margin-top: 20px;
+}
+
+button:hover {
+    cursor: pointer;
+    background-color: #34A6F4;
+}
