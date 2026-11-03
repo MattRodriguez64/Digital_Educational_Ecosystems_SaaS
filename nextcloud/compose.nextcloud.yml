@@ -1,0 +1,108 @@
+services:
+  nextcloud-db-init:
+    image: mariadb:11.4
+    restart: "no"
+    environment:
+      MYSQL_PWD: ${DB_ROOT_PASSWORD:?DB_ROOT_PASSWORD manquant dans .env}
+      NC_DB_NAME: ${NEXTCLOUD_DB_NAME:-nextcloud}
+      NC_DB_USER: ${NEXTCLOUD_DB_USER:-nextcloud}
+      NC_DB_PASSWORD: ${NEXTCLOUD_DB_PASSWORD:?NEXTCLOUD_DB_PASSWORD manquant dans .env}
+    command:
+      - sh
+      - -ec
+      - |
+        case "$$NC_DB_NAME$$NC_DB_USER" in
+          *[!A-Za-z0-9_]*) echo "Nom de base ou d'utilisateur invalide" >&2; exit 1 ;;
+        esac
+        pass=$$(printf '%s' "$$NC_DB_PASSWORD" | sed -e 's/\\/\\\\/g' -e "s/'/''/g")
+        mariadb -h mariadb -u root <<SQL
+        CREATE DATABASE IF NOT EXISTS $$NC_DB_NAME CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
+        CREATE USER IF NOT EXISTS '$$NC_DB_USER'@'%' IDENTIFIED BY '$$pass';
+        ALTER USER '$$NC_DB_USER'@'%' IDENTIFIED BY '$$pass';
+        GRANT ALL PRIVILEGES ON $$NC_DB_NAME.* TO '$$NC_DB_USER'@'%';
+        SQL
+        echo "Base $$NC_DB_NAME prête pour $$NC_DB_USER"
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    networks:
+      - backend
+
+  nextcloud:
+    image: digital-campus-nextcloud:v1
+    build: ./nextcloud
+    restart: unless-stopped
+    environment:
+      TZ: Europe/Paris
+      MYSQL_HOST: mariadb
+      MYSQL_DATABASE: ${NEXTCLOUD_DB_NAME:-nextcloud}
+      MYSQL_USER: ${NEXTCLOUD_DB_USER:-nextcloud}
+      MYSQL_PASSWORD: ${NEXTCLOUD_DB_PASSWORD:?NEXTCLOUD_DB_PASSWORD manquant dans .env}
+      NEXTCLOUD_ADMIN_USER: ${NEXTCLOUD_ADMIN_USER:-admin}
+      NEXTCLOUD_ADMIN_PASSWORD: ${NEXTCLOUD_ADMIN_PASSWORD:?NEXTCLOUD_ADMIN_PASSWORD manquant dans .env}
+      NEXTCLOUD_TRUSTED_DOMAINS: nextcloud.localhost
+      OVERWRITECLIURL: http://nextcloud.localhost
+      OVERWRITEPROTOCOL: http
+      TRUSTED_PROXIES: 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16
+      PHP_MEMORY_LIMIT: 512M
+      PHP_UPLOAD_LIMIT: 1G
+      NEXTCLOUD_LOGLEVEL: ${NEXTCLOUD_LOGLEVEL:-1}
+      NEXTCLOUD_DEFAULT_QUOTA: ${NEXTCLOUD_DEFAULT_QUOTA:-2 GB}
+      NEXTCLOUD_TEACHER_QUOTA: ${NEXTCLOUD_TEACHER_QUOTA:-10 GB}
+      NEXTCLOUD_DEMO_PASSWORD: ${NEXTCLOUD_DEMO_PASSWORD:-}
+    volumes:
+      - nextcloud_html:/var/www/html
+      - nextcloud_data:/var/www/html/data
+    depends_on:
+      mariadb:
+        condition: service_healthy
+      nextcloud-db-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost/status.php | grep -q '\"installed\":true'"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 5m
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=proxy
+      - traefik.http.routers.nextcloud.rule=Host(`nextcloud.localhost`)
+      - traefik.http.services.nextcloud.loadbalancer.server.port=80
+      - campus.service=nextcloud
+    networks:
+      - proxy
+      - backend
+
+  nextcloud-cron:
+    image: digital-campus-nextcloud:v1
+    build: ./nextcloud
+    restart: unless-stopped
+    entrypoint: /cron.sh
+    environment:
+      TZ: Europe/Paris
+    volumes:
+      - nextcloud_html:/var/www/html
+      - nextcloud_data:/var/www/html/data
+    depends_on:
+      nextcloud:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+    labels:
+      - campus.service=nextcloud-cron
+    networks:
+      - proxy
+      - backend
+
+volumes:
+  nextcloud_html:
+  nextcloud_data:
