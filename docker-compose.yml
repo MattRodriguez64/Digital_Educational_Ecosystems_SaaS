@@ -19,7 +19,10 @@ services:
       - proxy
 
   portail:
-    image: php:8.3-apache
+    image: digital-campus-portail:v1
+    build:
+      context: ./campus/services/portail/src
+      dockerfile: ../../php-apache.Dockerfile
     restart: unless-stopped
     volumes:
       - ./portail:/var/www/html:ro
@@ -31,7 +34,10 @@ services:
       - proxy
 
   support:
-    image: php:8.3-apache
+    image: digital-campus-support:v1
+    build:
+      context: ./support
+      dockerfile: ../campus/services/php-apache.Dockerfile
     restart: unless-stopped
     volumes:
       - ./support:/var/www/html:ro
@@ -43,6 +49,7 @@ services:
       - proxy
 
   elearn:
+    image: digital-campus-elearn:dev
     build: ./elearn
     restart: unless-stopped
     environment:
@@ -96,6 +103,11 @@ services:
     networks:
       - proxy
   elasticsearch:
+      healthcheck:
+        test: ["CMD-SHELL", "curl -fsS 'http://localhost:9200/_cluster/health?wait_for_status=yellow' >/dev/null"]
+        interval: 10s
+        timeout: 6s
+        retries: 24
       image: docker.elastic.co/elasticsearch/elasticsearch:9.5.4
       container_name: elasticsearch_container_elearn
       environment:
@@ -129,6 +141,8 @@ services:
           - elasticsearch
       volumes:
           - ./logstash.conf:/usr/share/logstash/pipeline/logstash.conf:ro
+          - ./campus/monitoring/pipelines.yml:/usr/share/logstash/config/pipelines.yml:ro
+          - ./campus/monitoring/pipeline.conf:/usr/share/logstash/pipeline/campus.conf:ro
   metricbeat:
       image: docker.elastic.co/beats/metricbeat:9.5.4
       container_name: metricbeat_container_elearn
@@ -140,7 +154,94 @@ services:
       depends_on:
           - elasticsearch
 
+  campus-admin:
+    build:
+      context: ./campus/services/admin
+      dockerfile: dockerfile
+    restart: unless-stopped
+    environment:
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      PORTAINER_URL: https://portainer:9443
+      PORTAINER_ENDPOINT_ID: ${PORTAINER_ENDPOINT_ID:-3}
+      PORTAINER_API_KEY: ${PORTAINER_API_KEY:-}
+    volumes:
+      - ./campus/services/admin/src:/var/www/html:ro
+      - ./campus/services/admin/templates:/var/www/templates:ro
+      - campus_dashboard_links:/var/lib/campus:ro
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=proxy
+      - traefik.http.routers.campus-admin.rule=Host(`gestion.localhost`)
+      - traefik.http.services.campus-admin.loadbalancer.server.port=80
+    depends_on:
+      campus-billing-init:
+        condition: service_completed_successfully
+    networks: [proxy, default, campus_db]
+
+  # Isoler les comptes administrateur et les factures de la base Moodle existante.
+  campus-db:
+    image: mariadb:11.4
+    restart: unless-stopped
+    environment:
+      MARIADB_DATABASE: admin_saas
+      MARIADB_USER: ${DB_USER}
+      MARIADB_PASSWORD: ${DB_PASSWORD}
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+    volumes:
+      - campus_admin_data:/var/lib/mysql
+      - ./campus/database/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [campus_db]
+
+  campus-billing-init:
+    image: mariadb:11.4
+    environment:
+      MYSQL_PWD: ${DB_PASSWORD}
+      DB_USER: ${DB_USER}
+    command: ["sh", "-ec", "mariadb -h campus-db -u \"$$DB_USER\" admin_saas < /billing.sql"]
+    volumes:
+      - ./campus/database/billing.sql:/billing.sql:ro
+    depends_on:
+      campus-db:
+        condition: service_healthy
+    networks: [campus_db]
+
+  campus-collector:
+    image: php:8.3-apache
+    restart: unless-stopped
+    command: ["php", "/collector.php"]
+    volumes:
+      - ./campus/monitoring/collector.php:/collector.php:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on:
+      logstash:
+        condition: service_started
+      campus-metrics-setup:
+        condition: service_completed_successfully
+  campus-metrics-setup:
+    image: php:8.3-apache
+    command: ["php", "/setup.php"]
+    volumes:
+      - ./campus/monitoring/setup.php:/setup.php:ro
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+  campus-dashboard-setup:
+    image: php:8.3-apache
+    command: ["php", "/dashboards.php"]
+    volumes:
+      - ./campus/monitoring/dashboards.php:/dashboards.php:ro
+      - campus_dashboard_links:/links
+    depends_on: [kibana]
+
 networks:
+  campus_db:
+    internal: true
   proxy:
     name: proxy
   backend:
@@ -151,3 +252,5 @@ volumes:
   db_data:
   portainer_data:
   elastic_data:
+  campus_admin_data:
+  campus_dashboard_links:

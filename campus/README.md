@@ -1,7 +1,7 @@
 # Administration des universités
 
-Depuis la racine du dépôt, `docker compose up -d --build` charge automatiquement la surcharge
-`docker-compose.override.yml`. Le dashboard est accessible à **http://gestion.localhost**.
+Depuis la racine du dépôt, `docker compose up -d --build` utilise le fichier principal
+`docker-compose.yml`. Le dashboard est accessible à **http://gestion.localhost**.
 Le portail, le support, Moodle et les pages déjà routées par Traefik gardent leurs adresses.
 
 ## Configuration locale
