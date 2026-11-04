@@ -3,7 +3,7 @@ $services = [
     ['nom' => 'Elearn', 'description' => 'Cours et activités en ligne', 'url' => 'http://elearn.' . getenv('UNIV_DOMAIN')],
     ['nom' => 'Nextcloud', 'description' => 'Stockage et partage de fichiers', 'url' => '#'],
     ['nom' => 'Kibana', 'description' => 'Monitoring et performances', 'url' => 'http://localhost:5601'],
-    ['nom' => 'Support', 'description' => 'Support et réclamations', 'url' => 'http://support.' . getenv('UNIV_DOMAIN')],
+    ['nom' => 'Support', 'description' => 'Support et réclamations', 'url' => 'http://support.localhost'],
 ];
 //faudra remplir pour nextcloud, voir plus selon ce qu'on fait
 ?>
