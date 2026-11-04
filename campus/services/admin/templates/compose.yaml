@@ -1,6 +1,6 @@
 services:
   portail:
-    image: digital-campus-portail:v1
+    image: digital-campus-portail:v2
     restart: unless-stopped
     environment:
       UNIV_DOMAIN: ${UNIV_DOMAIN}

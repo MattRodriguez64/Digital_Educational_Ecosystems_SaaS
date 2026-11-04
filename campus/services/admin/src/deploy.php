@@ -1,11 +1,13 @@
 <?php
 
 session_start();
+// vérification qu'un compte admin est co
 if (empty($_SESSION['admin_id'])) {
     header('Location: index.php');
     exit();
 }
 
+// Accès via form avec méthode POST sinon on mets une erreur 405
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
     exit('Méthode interdite');
@@ -20,10 +22,12 @@ if (
     exit('Requête invalide');
 }
 
+// Vérification que les champs pour créer une stack univ-* ne sont pas vides
 if (isset($_POST['univ-name']) && isset($_POST['univ-slug']) && isset($_POST['univ-country'])) {
     $name = $_POST['univ-name'];
     $slug = $_POST['univ-slug'];
     $country = $_POST['univ-country'];
+
     $email = filter_var($_POST['billing-email'] ?? '', FILTER_VALIDATE_EMAIL);
     if (
         !$email ||
@@ -35,6 +39,7 @@ if (isset($_POST['univ-name']) && isset($_POST['univ-slug']) && isset($_POST['un
         http_response_code(422);
         exit('Nom ou adresse de facturation invalide.');
     }
+    // On importe la config de connexion à la DB
     require __DIR__ . '/config.php';
 
     // Valider aussi côté serveur pour garantir que la stack apparaît dans la supervision.
@@ -49,7 +54,7 @@ if (isset($_POST['univ-name']) && isset($_POST['univ-slug']) && isset($_POST['un
     $domain = $slug . '.localhost';
     $stackName = $slug;
 
-    // Lire le template
+    // Lire le template (IMPOORTANT : de mettre le chemin absolu)
     $template = file_get_contents(dirname(__DIR__) . '/templates/compose.yaml');
 
     if ($template === false) {
@@ -62,12 +67,12 @@ if (isset($_POST['univ-name']) && isset($_POST['univ-slug']) && isset($_POST['un
     $apiKey = getenv('PORTAINER_API_KEY');
     $endpointId = getenv('PORTAINER_ENDPOINT_ID');
 
-    // Portainer reçoit le modèle Compose et les valeurs propres à cette université.
+    // Création du payload pour l'API Portainer.
     // Le même modèle peut ainsi servir à déployer plusieurs stacks.
     $data = [
-        'Name' => $stackName,
-        'StackFileContent' => $template,
-        'Env' => [
+        'Name' => $stackName, // Nom de la stack, par convention du projet : univ-*
+        'StackFileContent' => $template, // Fichier de config template
+        'Env' => [ // toutes les variables d'environnements nécessaire à la stack
             ['name' => 'DB_ROOT_PASSWORD', 'value' => 'moodle'],
             ['name' => 'DB_PASSWORD', 'value' => 'moodle'],
             ['name' => 'DB_USER', 'value' => 'moodle'],

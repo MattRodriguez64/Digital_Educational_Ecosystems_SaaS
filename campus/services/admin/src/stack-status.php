@@ -1,18 +1,20 @@
 <?php
+
 session_start();
+
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
 if (empty($_SESSION['admin_id'])) {
     http_response_code(401);
     exit('{}');
 }
+
 // Libérer la session avant les appels réseau pour ne pas bloquer une navigation.
 session_write_close();
 
 require __DIR__ . '/portainer.php';
 
-function university(string $name): array
-{
+function university(string $name): array {
     return [
         'name' => $name,
         'label' => $name,
@@ -29,6 +31,7 @@ function university(string $name): array
 try {
     $endpoint = getenv('PORTAINER_ENDPOINT_ID');
     $rows = [];
+    // On liste les stacks univ-* pour le dahsboard
     foreach (portainerList('stacks') as $stack) {
         $name = $stack['Name'];
         if ((string) $stack['EndpointId'] !== $endpoint || !str_starts_with($name, 'univ-')) {
@@ -64,6 +67,7 @@ try {
             $rows[$name]['stopped']++;
         }
     }
+
     foreach ($rows as &$row) {
         if ($row['total'] === 0) {
             $row['state'] = $row['managed'] === 2 ? 'stopped' : 'empty';
@@ -75,6 +79,7 @@ try {
             $row['state'] = 'partial';
         }
     }
+    
     unset($row);
     ksort($rows, SORT_NATURAL);
     echo json_encode(['stacks' => array_values($rows), 'at' => gmdate('c')], JSON_THROW_ON_ERROR);

@@ -1,5 +1,6 @@
 <?php
 // La clé API et le choix de l’environnement restent côté serveur.
+// Création de la requête Portainer
 function portainerRequest(string $path, string $method = 'GET', ?array $payload = null): array
 {
     $url = rtrim(getenv('PORTAINER_URL'), '/') . '/api/' . $path;

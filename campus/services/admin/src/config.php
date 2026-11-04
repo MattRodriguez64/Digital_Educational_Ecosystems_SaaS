@@ -4,6 +4,7 @@ if (session_status() !== PHP_SESSION_ACTIVE) {
     session_start();
 }
 
+// Connexion DB classique
 $db_host = 'campus-db';
 $db_user = getenv('DB_USER');
 $db_pass = getenv('DB_PASSWORD');

@@ -1,7 +1,6 @@
 <?php
 // Les lectures Elasticsearch portent uniquement sur les totaux horaires de la stack choisie.
-function meteredTotals(string $slug, string $month): array
-{
+function meteredTotals(string $slug, string $month): array {
     $fields = ['core_hours', 'gib_hours', 'traffic_gib'];
     $aggs = [];
     foreach ($fields as $field) {
@@ -35,8 +34,7 @@ function meteredTotals(string $slug, string $month): array
 }
 
 // Réunir le contact, les prix et les compteurs du mois pour calculer l’aperçu.
-function invoicePreview(mysqli $db, string $slug, string $month): array
-{
+function invoicePreview(mysqli $db, string $slug, string $month): array {
     $contact = $db
         ->execute_query('SELECT * FROM billing_contacts WHERE slug=?', [$slug])
         ->fetch_assoc();
@@ -102,22 +100,20 @@ function invoicePreview(mysqli $db, string $slug, string $month): array
 }
 
 // Protéger les caractères spéciaux des noms et adresses quand ils sont affichés en HTML.
-function esc($s): string
-{
+function esc($s): string {
     return htmlspecialchars((string) $s, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 }
+
 // Les montants des lignes sont stockés en centimes pour additionner les arrondis affichés.
-function euros(int $cents): string
-{
+function euros(int $cents): string {
     return number_format($cents / 100, 2, ',', ' ') . ' €';
 }
-function numberFr(float $n): string
-{
+
+function numberFr(float $n): string {
     return rtrim(rtrim(number_format($n, 6, ',', ' '), '0'), ',');
 }
 
-function invoiceDocument(array $bill, string $title, string $date): string
-{
+function invoiceDocument(array $bill, string $title, string $date): string {
     // Le même document autonome est utilisé à l’écran, au téléchargement et en pièce jointe.
     ob_start();
     require __DIR__ . '/../views/invoice.php';

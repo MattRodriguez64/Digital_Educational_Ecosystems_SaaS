@@ -1,5 +1,5 @@
 <?php
-// Le contrôleur prépare les données avant d’afficher cette page.
+// On Fait une facture HTML de la conso, plus facile à gérer + On peut la télécharger en format PDF si besoin
 if (!isset($bill, $title, $date)) {
     http_response_code(404);
     exit;

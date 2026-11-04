@@ -2,6 +2,5 @@ FROM php:8.3-apache
 
 RUN docker-php-ext-install mysqli && docker-php-ext-enable mysqli
 
-# Apache sert les pages PHP. Les modèles de déploiement restent en dehors du dossier web.
 COPY src/ /var/www/html/
 COPY templates/ /var/www/templates/

@@ -1,5 +1,5 @@
 <?php
-
+// Page de connexion classique
 ?>
 <!DOCTYPE html>
 <html lang="en">
