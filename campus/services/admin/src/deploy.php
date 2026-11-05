@@ -62,6 +62,17 @@ if (isset($_POST['univ-name']) && isset($_POST['univ-slug']) && isset($_POST['un
         exit('Template introuvable');
     }
 
+    // Lire le SQL Nextcloud et y insérer un mot de passe propre à l'université.
+    // Hexadécimal : sans apostrophe, donc sans risque dans la requête SQL.
+    $nextcloudDbPassword = bin2hex(random_bytes(16));
+    $nextcloudSql = file_get_contents(dirname(__DIR__) . '/templates/nextcloud.sql');
+
+    if ($nextcloudSql === false) {
+        http_response_code(500);
+        exit('SQL Nextcloud introuvable');
+    }
+    $nextcloudSql = strtr($nextcloudSql, ['{{NEXTCLOUD_DB_PASSWORD}}' => $nextcloudDbPassword]);
+
     // Paramètres de Portainer
     $portainerUrl = rtrim(getenv('PORTAINER_URL'), '/');
     $apiKey = getenv('PORTAINER_API_KEY');
@@ -80,7 +91,11 @@ if (isset($_POST['univ-name']) && isset($_POST['univ-slug']) && isset($_POST['un
             ['name' => 'UNIV_SLUG', 'value' => $slug],
             ['name' => 'UNIV_DOMAIN', 'value' => $domain],
             ['name' => 'UNIV_NAME', 'value' => $name],
-            ['name' => 'UNIV_COUNTRY', 'value' => $country]
+            ['name' => 'UNIV_COUNTRY', 'value' => $country],
+            ['name' => 'NEXTCLOUD_DB_PASSWORD', 'value' => $nextcloudDbPassword],
+            ['name' => 'NEXTCLOUD_DB_SQL', 'value' => $nextcloudSql],
+            ['name' => 'NEXTCLOUD_ADMIN_PASSWORD', 'value' => 'Admin-Campus-2026'],
+            ['name' => 'NEXTCLOUD_DEMO_PASSWORD', 'value' => 'Demo-Campus-2026']
         ]
     ];
 

@@ -87,6 +87,98 @@ services:
       - proxy
       - backend
 
+  nextcloud-db-init:
+    image: mariadb:11.4
+    environment:
+      MYSQL_PWD: ${DB_ROOT_PASSWORD}
+      NEXTCLOUD_DB_PASSWORD: ${NEXTCLOUD_DB_PASSWORD}
+    command: ["sh", "-ec", "case \"$$NEXTCLOUD_DB_PASSWORD\" in ''|*[!A-Za-z0-9_-]*) echo 'NEXTCLOUD_DB_PASSWORD : lettres, chiffres, - et _ uniquement' >&2; exit 1 ;; esac; sed \"s/{{NEXTCLOUD_DB_PASSWORD}}/$$NEXTCLOUD_DB_PASSWORD/\" /nextcloud.sql | mariadb -h mariadb -u root"]
+    volumes:
+      - ./campus/services/admin/templates/nextcloud.sql:/nextcloud.sql:ro
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    networks:
+      - backend
+
+  nextcloud:
+    image: digital-campus-nextcloud:v1
+    build:
+      context: ./campus/services/nextcloud
+      dockerfile: dockerfile
+    restart: unless-stopped
+    environment:
+      TZ: Europe/Paris
+      MYSQL_HOST: mariadb
+      MYSQL_DATABASE: nextcloud
+      MYSQL_USER: nextcloud
+      MYSQL_PASSWORD: ${NEXTCLOUD_DB_PASSWORD}
+      NEXTCLOUD_ADMIN_USER: ${NEXTCLOUD_ADMIN_USER:-admin}
+      NEXTCLOUD_ADMIN_PASSWORD: ${NEXTCLOUD_ADMIN_PASSWORD}
+      NEXTCLOUD_DEMO_PASSWORD: ${NEXTCLOUD_DEMO_PASSWORD:-}
+      NEXTCLOUD_TRUSTED_DOMAINS: nextcloud.localhost
+      OVERWRITECLIURL: http://nextcloud.localhost
+      OVERWRITEPROTOCOL: http
+      TRUSTED_PROXIES: 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16
+      PHP_MEMORY_LIMIT: 512M
+      PHP_UPLOAD_LIMIT: 100M
+      NEXTCLOUD_LOGLEVEL: 1
+      NEXTCLOUD_DEFAULT_QUOTA: 100 MB
+      NEXTCLOUD_TEACHER_QUOTA: 200 MB
+      NEXTCLOUD_COURSE_FOLDER_QUOTA: 300 MB
+      NEXTCLOUD_TEACHER_FOLDER_QUOTA: 100 MB
+    volumes:
+      - nextcloud_html:/var/www/html
+      - nextcloud_data:/var/www/html/data
+    depends_on:
+      mariadb:
+        condition: service_healthy
+      nextcloud-db-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost/status.php | grep -q '\"installed\":true'"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 5m
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 768M
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=proxy
+      - traefik.http.routers.nextcloud.rule=Host(`nextcloud.localhost`)
+      - traefik.http.services.nextcloud.loadbalancer.server.port=80
+    networks:
+      - proxy
+      - backend
+
+  nextcloud-cron:
+    image: digital-campus-nextcloud:v1
+    build:
+      context: ./campus/services/nextcloud
+      dockerfile: dockerfile
+    restart: unless-stopped
+    entrypoint: /cron.sh
+    environment:
+      TZ: Europe/Paris
+    volumes:
+      - nextcloud_html:/var/www/html
+      - nextcloud_data:/var/www/html/data
+    depends_on:
+      nextcloud:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+    networks:
+      - proxy
+      - backend
+
   mariadb:
     image: mariadb:11.4
     restart: unless-stopped
@@ -270,3 +362,5 @@ volumes:
   elastic_data:
   campus_admin_data:
   campus_dashboard_links:
+  nextcloud_html:
+  nextcloud_data:

@@ -52,6 +52,78 @@ services:
       - proxy
       - backend
 
+  nextcloud:
+    image: digital-campus-nextcloud:v1
+    restart: unless-stopped
+    environment:
+      TZ: Europe/Paris
+      MYSQL_HOST: db-${UNIV_SLUG}
+      MYSQL_DATABASE: nextcloud
+      MYSQL_USER: nextcloud
+      MYSQL_PASSWORD: ${NEXTCLOUD_DB_PASSWORD}
+      NEXTCLOUD_ADMIN_USER: admin
+      NEXTCLOUD_ADMIN_PASSWORD: ${NEXTCLOUD_ADMIN_PASSWORD}
+      NEXTCLOUD_DEMO_PASSWORD: ${NEXTCLOUD_DEMO_PASSWORD}
+      NEXTCLOUD_TRUSTED_DOMAINS: nextcloud.${UNIV_DOMAIN}
+      OVERWRITECLIURL: http://nextcloud.${UNIV_DOMAIN}
+      OVERWRITEPROTOCOL: http
+      TRUSTED_PROXIES: 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16
+      PHP_MEMORY_LIMIT: 512M
+      PHP_UPLOAD_LIMIT: 100M
+      NEXTCLOUD_LOGLEVEL: 1
+      NEXTCLOUD_DEFAULT_QUOTA: 100 MB
+      NEXTCLOUD_TEACHER_QUOTA: 200 MB
+      NEXTCLOUD_COURSE_FOLDER_QUOTA: 300 MB
+      NEXTCLOUD_TEACHER_FOLDER_QUOTA: 100 MB
+    volumes:
+      - nextcloud_html:/var/www/html
+      - nextcloud_data:/var/www/html/data
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost/status.php | grep -q '\"installed\":true'"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 5m
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 768M
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=proxy
+      - traefik.http.routers.nextcloud-${UNIV_SLUG}.rule=Host(`nextcloud.${UNIV_DOMAIN}`)
+      - traefik.http.routers.nextcloud-${UNIV_SLUG}.entrypoints=web
+      - traefik.http.routers.nextcloud-${UNIV_SLUG}.service=nextcloud-${UNIV_SLUG}
+      - traefik.http.services.nextcloud-${UNIV_SLUG}.loadbalancer.server.port=80
+    networks:
+      - proxy
+      - backend
+
+  nextcloud-cron:
+    image: digital-campus-nextcloud:v1
+    restart: unless-stopped
+    entrypoint: /cron.sh
+    environment:
+      TZ: Europe/Paris
+    volumes:
+      - nextcloud_html:/var/www/html
+      - nextcloud_data:/var/www/html/data
+    depends_on:
+      nextcloud:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+    networks:
+      - proxy
+      - backend
+
   mariadb:
     image: mariadb:11.4
     restart: unless-stopped
@@ -63,6 +135,9 @@ services:
       MARIADB_PASSWORD: ${DB_PASSWORD}
     volumes:
       - db_data:/var/lib/mysql
+    configs:
+      - source: nextcloud_db
+        target: /docker-entrypoint-initdb.d/20-nextcloud.sql
     healthcheck:
       test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
       interval: 10s
@@ -84,3 +159,9 @@ volumes:
   moodledata:
   db_data:
   portainer_data:
+  nextcloud_html:
+  nextcloud_data:
+
+configs:
+  nextcloud_db:
+    content: ${NEXTCLOUD_DB_SQL}

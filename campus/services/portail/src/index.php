@@ -1,7 +1,7 @@
 <?php
 $services = [
     ['nom' => 'Elearn', 'description' => 'Cours et activités en ligne', 'url' => 'http://elearn.' . getenv('UNIV_DOMAIN')],
-    ['nom' => 'Nextcloud', 'description' => 'Stockage et partage de fichiers', 'url' => '#'],
+    ['nom' => 'Nextcloud', 'description' => 'Stockage et partage de fichiers', 'url' => 'http://nextcloud.' . getenv('UNIV_DOMAIN')],
     ['nom' => 'Kibana', 'description' => 'Monitoring et performances', 'url' => 'http://localhost:5601'],
     ['nom' => 'Support', 'description' => 'Support et réclamations', 'url' => 'http://support.localhost'],
 ];
