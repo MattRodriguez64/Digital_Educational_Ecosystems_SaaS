@@ -28,7 +28,7 @@ services:
       - proxy
 
   elearn:
-    image: digital-campus-elearn:dev
+    image: digital-campus-elearn:v2
     restart: unless-stopped
     environment:
       MOODLE_URL: http://elearn.${UNIV_DOMAIN}
@@ -36,6 +36,8 @@ services:
       MOODLE_DB_NAME: ${DB_NAME}
       MOODLE_DB_USER: ${DB_USER}
       MOODLE_DB_PASSWORD: ${DB_PASSWORD}
+      MOODLE_DEMO_PASSWORD: ${MOODLE_DEMO_PASSWORD:-}
+      MOODLE_ADMIN_PASSWORD: ${MOODLE_ADMIN_PASSWORD}
     volumes:
       - moodledata:/var/www/moodledata
     depends_on:

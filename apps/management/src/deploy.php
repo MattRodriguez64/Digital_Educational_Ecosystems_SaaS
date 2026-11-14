@@ -91,6 +91,8 @@ if (isset($_POST['univ-name']) && isset($_POST['univ-slug']) && isset($_POST['un
             ['name' => 'DB_PASSWORD', 'value' => 'moodle'],
             ['name' => 'DB_USER', 'value' => 'moodle'],
             ['name' => 'DB_NAME', 'value' => 'moodle'],
+            ['name' => 'MOODLE_ADMIN_PASSWORD', 'value' => 'Admin-Campus-2026'],
+            ['name' => 'MOODLE_DEMO_PASSWORD', 'value' => 'Demo-Campus-2026'],
             ['name' => 'UNIV_SLUG', 'value' => $slug],
             ['name' => 'UNIV_DOMAIN', 'value' => $domain],
             ['name' => 'UNIV_NAME', 'value' => $name],

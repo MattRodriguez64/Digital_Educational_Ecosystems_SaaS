@@ -6,6 +6,14 @@ RUN printf "max_input_vars=5000\nmemory_limit=256M\nupload_max_filesize=64M\npos
 
 RUN curl -fsSL "https://download.moodle.org/download.php/direct/stable405/moodle-latest-405.tgz" | tar -xz --strip-components=1 -C /var/www/html
 
-RUN mkdir -p /var/www/moodlelang && curl -fsSL -o /tmp/fr.zip "https://download.moodle.org/download.php/direct/langpack/4.5/fr.zip" && unzip -q /tmp/fr.zip -d /var/www/moodlelang && rm /tmp/fr.zip
+RUN set -e; mkdir -p /var/www/moodlelang; \
+    for lang in fr es it pt ro; do \
+        curl -fsSL "https://download.moodle.org/download.php/direct/langpack/4.5/${lang}.zip" -o "/tmp/${lang}.zip"; \
+        unzip -q "/tmp/${lang}.zip" -d /var/www/moodlelang; \
+        rm "/tmp/${lang}.zip"; \
+    done
 RUN mkdir -p /var/www/moodledata && chown -R www-data:www-data /var/www/moodledata
 COPY config.php /var/www/html/config.php
+
+COPY --chmod=755 start-moodle.sh /usr/local/bin/start-moodle.sh
+ENTRYPOINT ["/usr/local/bin/start-moodle.sh"]
