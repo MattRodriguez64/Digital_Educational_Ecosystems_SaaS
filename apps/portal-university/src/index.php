@@ -1,8 +1,7 @@
 <?php
 $services = [
-    ['nom' => 'Elearn', 'description' => 'Cours et activités en ligne', 'url' => 'http://elearn.localhost'],
-    ['nom' => 'Nextcloud', 'description' => 'Stockage et partage de fichiers', 'url' => '#'],
-    ['nom' => 'Portainer', 'description' => 'Administration de la plateforme', 'url' => 'http://portainer.localhost'],
+    ['nom' => 'Elearn', 'description' => 'Cours et activités en ligne', 'url' => 'http://elearn.' . getenv('UNIV_DOMAIN')],
+    ['nom' => 'Nextcloud', 'description' => 'Stockage et partage de fichiers', 'url' => 'http://nextcloud.' . getenv('UNIV_DOMAIN')],
     ['nom' => 'Kibana', 'description' => 'Monitoring et performances', 'url' => 'http://localhost:5601'],
     ['nom' => 'Support', 'description' => 'Support et réclamations', 'url' => 'http://support.localhost'],
 ];
@@ -96,7 +95,7 @@ $services = [
 
 <body>
     <header>
-        <h1>Portail UNITA</h1>
+        <h1>Portail UNITA - <?php echo getenv('UNIV_NAME') . " - " . getenv('UNIV_COUNTRY'); ?></h1>
         <button type="button" class="bouton">Connexion</button>
     </header>
     <main>

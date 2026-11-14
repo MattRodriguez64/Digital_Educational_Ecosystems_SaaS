@@ -1,0 +1,21 @@
+metricbeat.modules:
+
+  - module: system
+    metricsets:
+      - cpu
+      - memory
+      - load
+      - process
+    period: 10s
+    
+  - module: docker
+    metricsets:
+      - container
+      - cpu
+      - memory
+    hosts:
+      - "unix:///var/run/docker.sock"
+    period: 10s
+
+output.elasticsearch:
+  hosts: ["http://elasticsearch:9200"]
