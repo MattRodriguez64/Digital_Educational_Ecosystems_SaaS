@@ -1,0 +1,43 @@
+version: "3.8"
+
+services:
+  management:
+    image: digital-campus-management:swarm-v1
+
+    environment:
+      DB_HOST: mariadb
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+
+    networks:
+      - proxy-swarm
+      - campus-backend
+
+    deploy:
+      replicas: 1
+      endpoint_mode: dnsrr
+
+      labels:
+        - "traefik.enable=true"
+        - "traefik.swarm.network=proxy-swarm"
+        - "traefik.http.routers.campus-management.rule=Host(`gestion.10.3.16.189.sslip.io`)"
+        - "traefik.http.routers.campus-management.entrypoints=web"
+        - "traefik.http.routers.campus-management.service=campus-management"
+        - "traefik.http.services.campus-management.loadbalancer.server.port=80"
+
+      resources:
+        reservations:
+          memory: 64M
+        limits:
+          cpus: "0.50"
+          memory: 256M
+
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+
+networks:
+  proxy-swarm:
+    external: true
+  campus-backend:
+    external: true

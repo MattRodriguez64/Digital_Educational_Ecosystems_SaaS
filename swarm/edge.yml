@@ -1,0 +1,37 @@
+version: "3.8"
+
+services:
+  traefik:
+    image: traefik:v3.6
+    command:
+      - "--providers.swarm=true"
+      - "--providers.swarm.endpoint=unix:///var/run/docker.sock"
+      - "--providers.swarm.exposedbydefault=false"
+      - "--providers.swarm.network=proxy-swarm"
+      - "--entrypoints.web.address=:80"
+      - "--accesslog=true"
+    ports:
+      - target: 80
+        published: 18081
+        protocol: tcp
+        mode: host
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - proxy-swarm
+    deploy:
+      replicas: 1
+      endpoint_mode: dnsrr
+      placement:
+        constraints:
+          - node.role == manager
+      resources:
+        reservations:
+          memory: 64M
+        limits:
+          memory: 256M
+      restart_policy:
+        condition: on-failure
+networks:
+  proxy-swarm:
+    external: true
