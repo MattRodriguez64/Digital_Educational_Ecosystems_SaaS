@@ -40,6 +40,10 @@ if (!isset($csrf)) {
                     <span aria-hidden="true">€</span>
                     Facturation
                 </a>
+                <a href="tickets.php">
+                    <span aria-hidden="true">✉</span>
+                    Tickets
+                </a>
                 <a href="#deploiement">
                     <span aria-hidden="true">＋</span>
                     Déploiement
@@ -235,6 +239,24 @@ if (!isset($csrf)) {
                         maxlength="254"
                         required
                         placeholder="facturation@universite.fr"
+                    />
+                    <label for="admin-email">E-mail du compte admin</label>
+                    <input
+                        id="admin-email"
+                        name="admin-email"
+                        type="email"
+                        maxlength="254"
+                        required
+                        placeholder="admin@universite.fr"
+                    />
+                    <label for="admin-password">Mot de passe du compte admin</label>
+                    <input
+                        id="admin-password"
+                        name="admin-password"
+                        type="password"
+                        minlength="8"
+                        required
+                        autocomplete="new-password"
                     />
                     <button class="button">Déployer la stack</button>
                 </form>

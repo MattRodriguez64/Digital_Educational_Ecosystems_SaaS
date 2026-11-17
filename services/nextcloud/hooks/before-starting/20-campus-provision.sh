@@ -78,4 +78,22 @@ if [ -n "${NEXTCLOUD_DEMO_PASSWORD:-}" ]; then
     ensure_user etudiant2 etudiants "Étudiant Démo 2" ""
 fi
 
+if [ -n "${NEXTCLOUD_AUTH_URL:-}" ]; then
+    if occ app:getpath user_external >/dev/null 2>&1; then
+        occ app:enable user_external >/dev/null
+    else
+        if occ app:install user_external >/dev/null 2>&1; then
+            log "Application installée : user_external"
+        else
+            log "ATTENTION : user_external non installée, connexion avec les comptes du portail impossible"
+        fi
+    fi
+
+    if occ app:getpath user_external >/dev/null 2>&1; then
+        backends='[{"class":"\\OCA\\UserExternal\\BasicAuth","arguments":["'"$NEXTCLOUD_AUTH_URL"'"]}]'
+        occ config:system:set user_backends --type=json --value="$backends" >/dev/null
+        log "Connexion avec les comptes du portail activée"
+    fi
+fi
+
 log "Configuration appliquée"

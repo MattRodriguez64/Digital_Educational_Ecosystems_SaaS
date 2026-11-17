@@ -39,6 +39,17 @@ if (isset($_POST['univ-name']) && isset($_POST['univ-slug']) && isset($_POST['un
         http_response_code(422);
         exit('Nom ou adresse de facturation invalide.');
     }
+    $adminEmail = filter_var(strtolower(trim($_POST['admin-email'] ?? '')), FILTER_VALIDATE_EMAIL);
+    $adminPassword = $_POST['admin-password'] ?? '';
+    if (
+        !$adminEmail ||
+        strlen($adminEmail) > 254 ||
+        !is_string($adminPassword) ||
+        strlen($adminPassword) < 8
+    ) {
+        http_response_code(422);
+        exit('E-mail ou mot de passe admin invalide (8 caractères minimum).');
+    }
     // On importe la config de connexion à la DB
     require __DIR__ . '/config.php';
 
@@ -73,8 +84,22 @@ if (isset($_POST['univ-name']) && isset($_POST['univ-slug']) && isset($_POST['un
     }
     $nextcloudSql = strtr($nextcloudSql, ['{{NEXTCLOUD_DB_PASSWORD}}' => $nextcloudDbPassword]);
 
+    $authSql = file_get_contents(dirname(__DIR__) . '/templates/auth.sql');
+
+    if ($authSql === false) {
+        http_response_code(500);
+        exit('SQL authentification introuvable');
+    }
+    $authSql = strtr($authSql, [
+        '{{DB_USER}}' => 'moodle',
+        '{{ADMIN_EMAIL}}' => str_replace("'", "''", $adminEmail),
+        '{{ADMIN_PASSWORD_HASH}}' => password_hash($adminPassword, PASSWORD_DEFAULT)
+    ]);
+    $authSql = str_replace('$', '$$', $authSql);
+
     // Le SQL multiligne doit rester dans le YAML : Portainer écrit Env dans stack.env.
-    $template = str_replace('${NEXTCLOUD_DB_SQL}', json_encode($nextcloudSql, JSON_THROW_ON_ERROR), $template);
+    $template = str_replace('${NEXTCLOUD_DB_SQL}', json_encode($nextcloudSql, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES), $template);
+    $template = str_replace('${AUTH_DB_SQL}', json_encode($authSql, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES), $template);
 
     // Paramètres de Portainer
     $portainerUrl = rtrim(getenv('PORTAINER_URL'), '/');
@@ -97,6 +122,7 @@ if (isset($_POST['univ-name']) && isset($_POST['univ-slug']) && isset($_POST['un
             ['name' => 'UNIV_DOMAIN', 'value' => $domain],
             ['name' => 'UNIV_NAME', 'value' => $name],
             ['name' => 'UNIV_COUNTRY', 'value' => $country],
+            ['name' => 'SUPPORT_SECRET', 'value' => getenv('SUPPORT_SECRET') ?: ''],
             ['name' => 'NEXTCLOUD_DB_PASSWORD', 'value' => $nextcloudDbPassword],
             ['name' => 'NEXTCLOUD_ADMIN_PASSWORD', 'value' => 'Admin-Campus-2026'],
             ['name' => 'NEXTCLOUD_DEMO_PASSWORD', 'value' => 'Demo-Campus-2026']

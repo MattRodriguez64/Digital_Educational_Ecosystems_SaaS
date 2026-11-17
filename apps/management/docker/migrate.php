@@ -14,18 +14,18 @@ for ($attempt = 1; $attempt <= 30; $attempt++) {
     }
 }
 $db->set_charset('utf8mb4');
-if ((int) $db->query("SELECT GET_LOCK('campus-billing-schema', 60)")->fetch_row()[0] !== 1) {
-    throw new RuntimeException('Migration Gestion dÃ©jÃ  verrouillÃ©e.');
-}
-try {
-    $sql = file_get_contents('/usr/local/share/campus/billing.sql');
-    if ($sql === false) { throw new RuntimeException('Migration de facturation introuvable.'); }
-    $db->multi_query($sql);
-    do {
-        if ($result = $db->store_result()) { $result->free(); }
-    } while ($db->more_results() && $db->next_result());
-    echo "[gestion] SchÃ©ma de facturation prÃªt.\n";
-} finally {
-    $db->query("SELECT RELEASE_LOCK('campus-billing-schema')");
-    $db->close();
-}
+// if ((int) $db->query("SELECT GET_LOCK('campus-billing-schema', 60)")->fetch_row()[0] !== 1) {
+//     throw new RuntimeException('Migration Gestion dÃ©jÃ  verrouillÃ©e.');
+// }
+// try {
+//     $sql = file_get_contents('/usr/local/share/campus/billing.sql');
+//     if ($sql === false) { throw new RuntimeException('Migration de facturation introuvable.'); }
+//     $db->multi_query($sql);
+//     do {
+//         if ($result = $db->store_result()) { $result->free(); }
+//     } while ($db->more_results() && $db->next_result());
+//     echo "[gestion] SchÃ©ma de facturation prÃªt.\n";
+// } finally {
+//     $db->query("SELECT RELEASE_LOCK('campus-billing-schema')");
+//     $db->close();
+// }
