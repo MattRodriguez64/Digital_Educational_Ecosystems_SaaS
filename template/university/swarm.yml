@@ -1,0 +1,206 @@
+version: '3.8'
+services:
+  portail:
+    image: digital-campus-portail:swarm-v1
+    environment:
+      UNIV_DOMAIN: ${UNIV_DOMAIN}
+      UNIV_NAME: ${UNIV_NAME}
+      UNIV_COUNTRY: ${UNIV_COUNTRY}
+    networks:
+    - proxy-swarm
+    deploy:
+      replicas: 1
+      endpoint_mode: dnsrr
+      placement:
+        constraints:
+        - node.hostname == ${DATA_NODE_HOSTNAME}
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 256M
+        reservations:
+          memory: 64M
+      labels:
+      - traefik.enable=true
+      - traefik.http.routers.portail-${UNIV_SLUG}.rule=Host(`moncompte.${UNIV_DOMAIN}`) || Host(`${UNIV_DOMAIN}`)
+      - traefik.http.routers.portail-${UNIV_SLUG}.entrypoints=web
+      - traefik.http.routers.portail-${UNIV_SLUG}.service=portail-${UNIV_SLUG}
+      - traefik.http.services.portail-${UNIV_SLUG}.loadbalancer.server.port=80
+      - traefik.swarm.network=proxy-swarm
+  elearn:
+    image: digital-campus-elearn:swarm-v1
+    environment:
+      MOODLE_URL: http://elearn.${UNIV_DOMAIN}:${PUBLIC_PORT}
+      MOODLE_DB_HOST: db-${UNIV_SLUG}
+      MOODLE_DB_NAME: ${DB_NAME}
+      MOODLE_DB_USER: ${DB_USER}
+      MOODLE_DB_PASSWORD: ${DB_PASSWORD}
+      MOODLE_DEMO_PASSWORD: ${MOODLE_DEMO_PASSWORD:-}
+      MOODLE_ADMIN_PASSWORD: ${MOODLE_ADMIN_PASSWORD}
+    volumes:
+    - moodledata:/var/www/moodledata
+    networks:
+    - proxy-swarm
+    - backend
+    deploy:
+      replicas: 1
+      endpoint_mode: dnsrr
+      placement:
+        constraints:
+        - node.hostname == ${DATA_NODE_HOSTNAME}
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 768M
+        reservations:
+          memory: 128M
+      labels:
+      - traefik.enable=true
+      - traefik.http.routers.elearn-${UNIV_SLUG}.rule=Host(`elearn.${UNIV_DOMAIN}`)
+      - traefik.http.routers.elearn-${UNIV_SLUG}.entrypoints=web
+      - traefik.http.routers.elearn-${UNIV_SLUG}.service=elearn-${UNIV_SLUG}
+      - traefik.http.services.elearn-${UNIV_SLUG}.loadbalancer.server.port=80
+      - traefik.swarm.network=proxy-swarm
+  nextcloud:
+    image: digital-campus-nextcloud:swarm-v1
+    environment:
+      TZ: Europe/Paris
+      MYSQL_HOST: db-${UNIV_SLUG}
+      MYSQL_DATABASE: nextcloud
+      MYSQL_USER: nextcloud
+      MYSQL_PASSWORD: ${NEXTCLOUD_DB_PASSWORD}
+      NEXTCLOUD_ADMIN_USER: ${NEXTCLOUD_ADMIN_USER}
+      NEXTCLOUD_ADMIN_PASSWORD: ${NEXTCLOUD_ADMIN_PASSWORD}
+      NEXTCLOUD_DEMO_PASSWORD: ${NEXTCLOUD_DEMO_PASSWORD}
+      NEXTCLOUD_TRUSTED_DOMAINS: nextcloud.${UNIV_DOMAIN}
+      OVERWRITECLIURL: http://nextcloud.${UNIV_DOMAIN}:${PUBLIC_PORT}
+      OVERWRITEPROTOCOL: http
+      TRUSTED_PROXIES: 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16
+      PHP_MEMORY_LIMIT: 512M
+      PHP_UPLOAD_LIMIT: 100M
+      NEXTCLOUD_LOGLEVEL: '1'
+      NEXTCLOUD_DEFAULT_QUOTA: 100 MB
+      NEXTCLOUD_TEACHER_QUOTA: 200 MB
+      NEXTCLOUD_COURSE_FOLDER_QUOTA: 300 MB
+      NEXTCLOUD_TEACHER_FOLDER_QUOTA: 100 MB
+      CAMPUS_DB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      OVERWRITEHOST: nextcloud.${UNIV_DOMAIN}:${PUBLIC_PORT}
+    volumes:
+    - nextcloud_html:/var/www/html
+    - nextcloud_data:/var/www/html/data
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - curl -fsS http://localhost/status.php | grep -q '"installed":true'
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 10m
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 768M
+        reservations:
+          memory: 128M
+      replicas: 1
+      endpoint_mode: dnsrr
+      placement:
+        constraints:
+        - node.hostname == ${DATA_NODE_HOSTNAME}
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+      labels:
+      - traefik.enable=true
+      - traefik.http.routers.nextcloud-${UNIV_SLUG}.rule=Host(`nextcloud.${UNIV_DOMAIN}`)
+      - traefik.http.routers.nextcloud-${UNIV_SLUG}.entrypoints=web
+      - traefik.http.routers.nextcloud-${UNIV_SLUG}.service=nextcloud-${UNIV_SLUG}
+      - traefik.http.services.nextcloud-${UNIV_SLUG}.loadbalancer.server.port=80
+      - traefik.swarm.network=proxy-swarm
+    networks:
+    - proxy-swarm
+    - backend
+  nextcloud-cron:
+    image: digital-campus-nextcloud:swarm-v1
+    entrypoint: /cron.sh
+    environment:
+      TZ: Europe/Paris
+    volumes:
+    - nextcloud_html:/var/www/html
+    - nextcloud_data:/var/www/html/data
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          memory: 128M
+      replicas: 1
+      endpoint_mode: dnsrr
+      placement:
+        constraints:
+        - node.hostname == ${DATA_NODE_HOSTNAME}
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+    networks:
+    - proxy-swarm
+    - backend
+  mariadb:
+    image: mariadb:11.4
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci --innodb-buffer-pool-size=128M --max-connections=50
+    environment:
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      MARIADB_DATABASE: ${DB_NAME}
+      MARIADB_USER: ${DB_USER}
+      MARIADB_PASSWORD: ${DB_PASSWORD}
+    volumes:
+    - db_data:/var/lib/mysql
+    healthcheck:
+      test:
+      - CMD
+      - healthcheck.sh
+      - --connect
+      - --innodb_initialized
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10m
+    networks:
+      backend:
+        aliases:
+        - db-${UNIV_SLUG}
+    deploy:
+      replicas: 1
+      endpoint_mode: dnsrr
+      placement:
+        constraints:
+        - node.hostname == ${DATA_NODE_HOSTNAME}
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          memory: 128M
+networks:
+  proxy-swarm:
+    external: true
+  backend:
+    driver: overlay
+    attachable: true
+    internal: true
+volumes:
+  moodledata:
+  db_data:
+  nextcloud_html:
+  nextcloud_data:

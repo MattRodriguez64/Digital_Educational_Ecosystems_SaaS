@@ -15,7 +15,7 @@ services:
       labels:
         - "traefik.enable=true"
         - "traefik.swarm.network=proxy-swarm"
-        - "traefik.http.routers.campus-support.rule=Host(`support.10.3.16.189.sslip.io`)"
+        - "traefik.http.routers.campus-support.rule=Host(`support.10.3.17.216.sslip.io`)"
         - "traefik.http.routers.campus-support.entrypoints=web"
         - "traefik.http.routers.campus-support.service=campus-support"
         - "traefik.http.services.campus-support.loadbalancer.server.port=80"

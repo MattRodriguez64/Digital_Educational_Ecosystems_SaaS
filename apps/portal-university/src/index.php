@@ -1,9 +1,12 @@
 <?php
+$domain = getenv('UNIV_DOMAIN') ?: '';
+$port = getenv('PUBLIC_PORT') ?: '80';
+$suffix = $port === '80' ? '' : ':' . $port;
 $services = [
-    ['nom' => 'Elearn', 'description' => 'Cours et activités en ligne', 'url' => 'http://elearn.' . getenv('UNIV_DOMAIN')],
-    ['nom' => 'Nextcloud', 'description' => 'Stockage et partage de fichiers', 'url' => 'http://nextcloud.' . getenv('UNIV_DOMAIN')],
+    ['nom' => 'Elearn', 'description' => 'Cours et activités en ligne', 'url' => 'http://elearn.' . $domain . $suffix],
+    ['nom' => 'Nextcloud', 'description' => 'Stockage et partage de fichiers', 'url' => 'http://nextcloud.' . $domain . $suffix],
     ['nom' => 'Kibana', 'description' => 'Monitoring et performances', 'url' => 'http://localhost:5601'],
-    ['nom' => 'Support', 'description' => 'Support et réclamations', 'url' => 'http://support.localhost'],
+    ['nom' => 'Support', 'description' => 'Support et réclamations', 'url' => 'http://support.' . $domain],
 ];
 //faudra remplir pour nextcloud, voir plus selon ce qu'on fait
 ?>

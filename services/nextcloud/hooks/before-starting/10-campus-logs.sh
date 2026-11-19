@@ -1,6 +1,19 @@
 #!/bin/sh
 set -eu
 
+if ! php -r '
+$CONFIG = [];
+$file = "/var/www/html/config/config.php";
+if (!is_file($file)) {
+    exit(1);
+}
+require $file;
+exit(($CONFIG["installed"] ?? false) === true ? 0 : 1);
+'; then
+    echo "[campus-nextcloud] Installation non terminée : configuration des journaux reportée."
+    exit 0
+fi
+
 occ() { php /var/www/html/occ "$@"; }
 
 occ config:system:set log_type --value=errorlog

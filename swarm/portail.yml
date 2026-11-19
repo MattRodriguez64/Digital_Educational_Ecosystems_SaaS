@@ -6,7 +6,7 @@ services:
     environment:
       UNIV_NAME: "Universite Test"
       UNIV_COUNTRY: "France"
-      UNIV_DOMAIN: "10.3.16.189"
+      UNIV_DOMAIN: "10.3.17.216"
     networks:
       - proxy-swarm
     deploy:
@@ -15,7 +15,7 @@ services:
       labels:
         - "traefik.enable=true"
         - "traefik.swarm.network=proxy-swarm"
-        - "traefik.http.routers.campus-portail.rule=Host(`10.3.16.189`)"
+        - "traefik.http.routers.campus-portail.rule=Host(`10.3.17.216`)"
         - "traefik.http.routers.campus-portail.entrypoints=web"
         - "traefik.http.routers.campus-portail.service=campus-portail"
         - "traefik.http.services.campus-portail.loadbalancer.server.port=80"

@@ -8,7 +8,18 @@ services:
       DB_HOST: mariadb
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
-
+      PORTAINER_URL: ${PORTAINER_URL}
+      PORTAINER_ENDPOINT_ID: ${PORTAINER_ENDPOINT_ID}
+      PORTAINER_API_KEY: ${PORTAINER_API_KEY}
+      CAMPUS_BASE_DOMAIN: ${CAMPUS_BASE_DOMAIN}
+      MOODLE_ADMIN_PASSWORD: ${MOODLE_ADMIN_PASSWORD}
+      MOODLE_DEMO_PASSWORD: ${MOODLE_DEMO_PASSWORD}
+      NEXTCLOUD_ADMIN_USER: ${NEXTCLOUD_ADMIN_USER}
+      NEXTCLOUD_ADMIN_PASSWORD: ${NEXTCLOUD_ADMIN_PASSWORD}
+      NEXTCLOUD_DEMO_PASSWORD: ${NEXTCLOUD_DEMO_PASSWORD}
+      PORTAINER_TLS_VERIFY: ${PORTAINER_VERIFY_TLS}
+      DATA_NODE_HOSTNAME: ${DATA_NODE_HOSTNAME}
+      PUBLIC_PORT: ${PUBLIC_PORT}
     networks:
       - proxy-swarm
       - campus-backend
@@ -16,11 +27,13 @@ services:
     deploy:
       replicas: 1
       endpoint_mode: dnsrr
-
+      placement:
+        constraints:
+          - node.hostname == debian
       labels:
         - "traefik.enable=true"
         - "traefik.swarm.network=proxy-swarm"
-        - "traefik.http.routers.campus-management.rule=Host(`gestion.10.3.16.189.sslip.io`)"
+        - "traefik.http.routers.campus-management.rule=Host(`gestion.10.3.17.216.sslip.io`)"
         - "traefik.http.routers.campus-management.entrypoints=web"
         - "traefik.http.routers.campus-management.service=campus-management"
         - "traefik.http.services.campus-management.loadbalancer.server.port=80"
