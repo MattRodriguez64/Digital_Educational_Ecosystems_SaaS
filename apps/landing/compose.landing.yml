@@ -1,0 +1,83 @@
+secrets:
+  landing_db_password:
+    file: ./apps/landing/secrets/landing_db_password.txt
+  geonames_username:
+    file: ./apps/landing/secrets/geonames_username.txt
+
+services:
+  mariadb:
+    volumes:
+      - ./apps/landing/db/landing-init.sh:/docker-entrypoint-initdb.d/zy-landing.sh:ro
+    secrets:
+      - landing_db_password
+
+  mailpit:
+    image: axllent/mailpit:latest
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 64M
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=proxy
+      - traefik.http.routers.landing-mail.rule=Host(`mail.landing.localhost`)
+      - traefik.http.services.landing-mail.loadbalancer.server.port=8025
+    networks:
+      - proxy
+      - backend
+
+  landing-api:
+    build: ./apps/landing/api
+    restart: unless-stopped
+    environment:
+      DB_HOST: mariadb
+      DB_NAME: landing
+      DB_USER: landing
+      DB_PASSWORD_FILE: /run/secrets/landing_db_password
+      GEONAMES_USERNAME_FILE: /run/secrets/geonames_username
+      SMTP_HOST: mailpit
+      SMTP_PORT: "1025"
+      MAIL_FROM: Digital Educational System SaaS <no-reply@digital-educational-system.localhost>
+    secrets:
+      - landing_db_password
+      - geonames_username
+    read_only: true
+    tmpfs:
+      - /tmp
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 128M
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=proxy
+      - traefik.http.routers.landing-api.rule=Host(`landing.localhost`) && PathPrefix(`/api`)
+      - traefik.http.routers.landing-api.priority=100
+      - traefik.http.services.landing-api.loadbalancer.server.port=3000
+    networks:
+      - proxy
+      - backend
+
+  landing-web:
+    build: ./apps/landing/web
+    restart: unless-stopped
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 64M
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=proxy
+      - traefik.http.routers.landing-web.rule=Host(`landing.localhost`)
+      - traefik.http.services.landing-web.loadbalancer.server.port=8080
+    networks:
+      - proxy
