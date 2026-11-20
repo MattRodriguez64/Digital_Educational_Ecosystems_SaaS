@@ -1,0 +1,103 @@
+version: "3.8"
+
+services:
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:${ELASTIC_VERSION:-9.5.4}
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: "-Xms512m -Xmx512m"
+    volumes:
+      - elastic_data:/usr/share/elasticsearch/data
+    networks:
+      campus-backend:
+        aliases: [elasticsearch]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS 'http://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=5s' >/dev/null"]
+      interval: 20s
+      timeout: 10s
+      retries: 10
+      start_period: 5m
+    deploy:
+      replicas: 1
+      endpoint_mode: dnsrr
+      placement:
+        constraints:
+          - node.hostname == ${DATA_NODE_HOSTNAME:-debian}
+      resources:
+        limits:
+          memory: 2G
+          cpus: "1.0"
+        reservations:
+          memory: 768M
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+
+  collector:
+    image: digital-campus-collector:swarm-v1
+    environment:
+      NODE_ID: "{{.Node.ID}}"
+      ELASTICSEARCH_URL: http://elasticsearch:9200
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - collector_state:/state
+    networks: [campus-backend]
+    deploy:
+      mode: global
+      endpoint_mode: dnsrr
+      placement:
+        constraints:
+          - node.platform.os == linux
+          - node.labels.campus_monitoring == true
+      resources:
+        limits:
+          memory: 128M
+          cpus: "0.50"
+        reservations:
+          memory: 32M
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+      update_config:
+        order: stop-first
+  kibana:
+    image: docker.elastic.co/kibana/kibana:9.5.4
+    environment:
+      ELASTICSEARCH_HOSTS: '["http://elasticsearch:9200"]'
+      SERVER_HOST: "0.0.0.0"
+      SERVER_PUBLICBASEURL: "http://kibana.${CAMPUS_BASE_DOMAIN:-10.3.17.216.sslip.io}:${PUBLIC_PORT:-18081}"
+      NODE_OPTIONS: "--max-old-space-size=768"
+    networks:
+      - campus-backend
+      - proxy-swarm
+    deploy:
+      replicas: 1
+      endpoint_mode: dnsrr
+      placement:
+        constraints:
+          - node.hostname == ${DATA_NODE_HOSTNAME:-debian}
+      resources:
+        limits:
+          memory: 1536M
+        reservations:
+          memory: 256M
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+      labels:
+        - "traefik.enable=true"
+        - "traefik.swarm.network=proxy-swarm"
+        - "traefik.http.routers.campus-kibana.rule=Host(`kibana.${CAMPUS_BASE_DOMAIN:-10.3.17.216.sslip.io}`)"
+        - "traefik.http.routers.campus-kibana.entrypoints=web"
+        - "traefik.http.routers.campus-kibana.service=campus-kibana"
+        - "traefik.http.services.campus-kibana.loadbalancer.server.port=5601"
+networks:
+  campus-backend:
+    external: true
+  proxy-swarm:
+    external: true
+
+volumes:
+  elastic_data:
+  collector_state:

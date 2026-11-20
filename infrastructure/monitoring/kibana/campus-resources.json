@@ -1,0 +1,112 @@
+{
+  "title": "Campus — CPU et mémoire",
+  "description": "campus-swarm-dashboard:v1:campus-resources",
+  "time_range": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "panels": [
+    {
+      "type": "markdown",
+      "grid": {
+        "x": 0,
+        "y": 0,
+        "w": 48,
+        "h": 5
+      },
+      "config": {
+        "content": "Chaque courbe correspond à une université et un nœud. Les points sont des moyennes des relevés disponibles sur chaque intervalle. Pour le total actuel de tous les nœuds, utiliser le tableau Consommation dans Gestion. Une absence de relevés ne signifie pas zéro consommation. Jusqu’à 100 séries sont affichées ; filtrer par université pour affiner. 100 % CPU = un cœur. Mémoire hors cache inactif."
+      }
+    },
+    {
+      "type": "vis",
+      "grid": {
+        "x": 0,
+        "y": 5,
+        "w": 48,
+        "h": 15
+      },
+      "config": {
+        "type": "xy",
+        "title": "CPU moyen (% d’un cœur) — université / nœud",
+        "query": {
+          "language": "kql",
+          "query": "complete: true"
+        },
+        "layers": [
+          {
+            "type": "line",
+            "data_source": {
+              "type": "data_view_spec",
+              "index_pattern": "campus-usage-swarm-*",
+              "time_field": "@timestamp"
+            },
+            "x": {
+              "operation": "date_histogram",
+              "field": "@timestamp"
+            },
+            "y": [
+              {
+                "operation": "average",
+                "field": "cpu_pct"
+              }
+            ],
+            "breakdown_by": {
+              "operation": "terms",
+              "fields": [
+                "university",
+                "node_id"
+              ],
+              "limit": 100
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "vis",
+      "grid": {
+        "x": 0,
+        "y": 20,
+        "w": 48,
+        "h": 15
+      },
+      "config": {
+        "type": "xy",
+        "title": "Mémoire moyenne (Mio) — université / nœud",
+        "query": {
+          "language": "kql",
+          "query": "complete: true"
+        },
+        "layers": [
+          {
+            "type": "line",
+            "data_source": {
+              "type": "data_view_spec",
+              "index_pattern": "campus-usage-swarm-*",
+              "time_field": "@timestamp"
+            },
+            "x": {
+              "operation": "date_histogram",
+              "field": "@timestamp"
+            },
+            "y": [
+              {
+                "operation": "average",
+                "field": "memory_mib"
+              }
+            ],
+            "breakdown_by": {
+              "operation": "terms",
+              "fields": [
+                "university",
+                "node_id"
+              ],
+              "limit": 100
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

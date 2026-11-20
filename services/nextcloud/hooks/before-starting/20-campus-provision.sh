@@ -4,6 +4,24 @@ set -eu
 occ() { php /var/www/html/occ "$@"; }
 log() { echo "[campus-nextcloud] $*"; }
 
+# Provision only after Nextcloud reports a completed installation.
+status_json=$(occ status --output=json) || {
+    log "Impossible de lire l'etat Nextcloud ; verifier la base et la configuration."
+    exit 1
+}
+installed=$(printf '%s' "$status_json" | php -r '
+    $status = json_decode(stream_get_contents(STDIN), true);
+    if (!is_array($status) || !array_key_exists("installed", $status) || !is_bool($status["installed"])) {
+        fwrite(STDERR, "Reponse occ status invalide\n");
+        exit(1);
+    }
+    echo $status["installed"] ? "yes" : "no";
+') || exit 1
+if [ "$installed" = "no" ]; then
+    log "Installation non terminee : provisioning reporte."
+    exit 0
+fi
+
 i=0
 for domain in ${NEXTCLOUD_TRUSTED_DOMAINS:-}; do
     occ config:system:set trusted_domains "$i" --value="$domain" >/dev/null

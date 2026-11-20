@@ -1,5 +1,5 @@
 <?php
-// Le contrôleur prépare les données avant d’afficher cette page.
+// Le contrôleur prépare les données avant d’afficher cette page
 if (!isset($csrf)) {
     http_response_code(404);
     exit;
@@ -150,9 +150,9 @@ if (!isset($csrf)) {
                 </dialog>
             </section>
             <section id="usage" class="panel" hidden>
-                <small>OBSERVABILITÉ · ELK</small>
+                <small>RESSOURCES UNIVERSITAIRES</small>
                 <h1>Consommation</h1>
-                <p>Comparez les ressources utilisées et explorez leur évolution dans Kibana.</p>
+                <p>Comparez les dernières mesures des universités et consultez les courbes historiques par université et par nœud.</p>
                 <div class="usage-controls">
                     <label>
                         Université

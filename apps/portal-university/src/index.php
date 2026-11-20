@@ -6,7 +6,7 @@ $services = [
     ['nom' => 'Elearn', 'description' => 'Cours et activités en ligne', 'url' => 'http://elearn.' . $domain . $suffix],
     ['nom' => 'Nextcloud', 'description' => 'Stockage et partage de fichiers', 'url' => 'http://nextcloud.' . $domain . $suffix],
     ['nom' => 'Kibana', 'description' => 'Monitoring et performances', 'url' => 'http://localhost:5601'],
-    ['nom' => 'Support', 'description' => 'Support et réclamations', 'url' => 'http://support.' . $domain],
+    ['nom' => 'Support', 'description' => 'Support et réclamations', 'url' => 'http://support.10.3.17.216.sslip.io:18081/'],
 ];
 //faudra remplir pour nextcloud, voir plus selon ce qu'on fait
 ?>
