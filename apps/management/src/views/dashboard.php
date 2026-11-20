@@ -1,5 +1,5 @@
 <?php
-// Le contrôleur prépare les données avant d’afficher cette page
+// Le contrôleur prépare les données avant d’afficher cette pag
 if (!isset($csrf)) {
     http_response_code(404);
     exit;
@@ -15,6 +15,7 @@ if (!isset($csrf)) {
         <link rel="stylesheet" href="styles/dashboard.css?v=<?= filemtime(__DIR__ . '/../styles/dashboard.css') ?>" />
         <script defer src="scripts/dashboard.js?v=<?= filemtime(__DIR__ . '/../scripts/dashboard.js') ?>"></script>
         <script defer src="scripts/consumption.js"></script>
+        <script defer src="scripts/scale-test.js?v=<?= filemtime(__DIR__ . '/../scripts/scale-test.js') ?>"></script>
     </head>
     <body>
         <aside>
@@ -177,6 +178,18 @@ if (!isset($csrf)) {
                     <a class="button" id="network-link" target="_blank" rel="noopener">
                         Courbes réseau ↗
                     </a>
+                </div>
+                <div id="scale-test" data-csrf="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
+                    <h2>Démo d’élasticité du portail</h2>
+                    <p>Charge simulée : à 90 %, le portail passe à 2 réplicas ; sous 50 %, il revient à 1.
+                        Les mesures ci-dessous restent réelles. Le test ne génère pas de charge CPU.</p>
+                    <div class="usage-links">
+                        <button type="button" id="scale-high" disabled>Simuler 90 % → 2 réplicas</button>
+                        <button type="button" id="scale-low" disabled>Simuler 40 % → 1 réplica</button>
+                    </div>
+                    <p id="scale-status" role="status" aria-live="polite">Sélectionnez une université ci-dessus.</p>
+                    <p class="usage-note">Seul le portail est redimensionné. Utilisez le retour à 40 % pour terminer
+                        le test ; les 2 réplicas restent demandés jusque-là. Un redéploiement de la stack peut rétablir son nombre initial.</p>
                 </div>
                 <h2>Dernières mesures</h2>
                 <p id="usage-status" role="status">Chargement des mesures…</p>
