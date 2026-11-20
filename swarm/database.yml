@@ -1,0 +1,67 @@
+version: "3.8"
+
+services:
+  mariadb:
+    image: mariadb:11.4
+
+    environment:
+      MARIADB_DATABASE: admin_saas
+      MARIADB_USER: ${DB_USER}
+      MARIADB_PASSWORD: ${DB_PASSWORD}
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+
+    command:
+      - "--character-set-server=utf8mb4"
+      - "--collation-server=utf8mb4_unicode_ci"
+      - "--innodb-buffer-pool-size=128M"
+      - "--max-connections=50"
+
+    configs:
+      - source: campus_init_v2
+        target: /docker-entrypoint-initdb.d/10-init.sql
+
+    volumes:
+      - db_data:/var/lib/mysql
+
+    networks:
+      campus-backend:
+        aliases:
+          - mariadb
+
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+
+    deploy:
+      replicas: 1
+      endpoint_mode: dnsrr
+
+      placement:
+        constraints:
+          - node.labels.campus_data == true
+
+      resources:
+        reservations:
+          memory: 128M
+        limits:
+          cpus: "0.50"
+          memory: 512M
+
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+
+networks:
+  campus-backend:
+    external: true
+
+volumes:
+  db_data:
+
+configs:
+  campus_init_v2:
+    file: ../infrastructure/database/init.sql
+

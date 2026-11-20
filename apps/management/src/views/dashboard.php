@@ -1,5 +1,5 @@
 <?php
-// Le contrôleur prépare les données avant d’afficher cette page.
+// Le contrôleur prépare les données avant d’afficher cette pag
 if (!isset($csrf)) {
     http_response_code(404);
     exit;
@@ -15,6 +15,7 @@ if (!isset($csrf)) {
         <link rel="stylesheet" href="styles/dashboard.css?v=<?= filemtime(__DIR__ . '/../styles/dashboard.css') ?>" />
         <script defer src="scripts/dashboard.js?v=<?= filemtime(__DIR__ . '/../scripts/dashboard.js') ?>"></script>
         <script defer src="scripts/consumption.js"></script>
+        <script defer src="scripts/scale-test.js?v=<?= filemtime(__DIR__ . '/../scripts/scale-test.js') ?>"></script>
     </head>
     <body>
         <aside>
@@ -39,6 +40,10 @@ if (!isset($csrf)) {
                 <a href="billing.php">
                     <span aria-hidden="true">€</span>
                     Facturation
+                </a>
+                <a href="tickets.php">
+                    <span aria-hidden="true">✉</span>
+                    Tickets
                 </a>
                 <a href="#deploiement">
                     <span aria-hidden="true">＋</span>
@@ -150,9 +155,9 @@ if (!isset($csrf)) {
                 </dialog>
             </section>
             <section id="usage" class="panel" hidden>
-                <small>OBSERVABILITÉ · ELK</small>
+                <small>RESSOURCES UNIVERSITAIRES</small>
                 <h1>Consommation</h1>
-                <p>Comparez les ressources utilisées et explorez leur évolution dans Kibana.</p>
+                <p>Comparez les dernières mesures des universités et consultez les courbes historiques par université et par nœud.</p>
                 <div class="usage-controls">
                     <label>
                         Université
@@ -177,6 +182,18 @@ if (!isset($csrf)) {
                     <a class="button" id="network-link" target="_blank" rel="noopener">
                         Courbes réseau ↗
                     </a>
+                </div>
+                <div id="scale-test" data-csrf="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
+                    <h2>Démo d’élasticité du portail</h2>
+                    <p>Charge simulée : à 90 %, le portail passe à 2 réplicas ; sous 50 %, il revient à 1.
+                        Les mesures ci-dessous restent réelles. Le test ne génère pas de charge CPU.</p>
+                    <div class="usage-links">
+                        <button type="button" id="scale-high" disabled>Simuler 90 % → 2 réplicas</button>
+                        <button type="button" id="scale-low" disabled>Simuler 40 % → 1 réplica</button>
+                    </div>
+                    <p id="scale-status" role="status" aria-live="polite">Sélectionnez une université ci-dessus.</p>
+                    <p class="usage-note">Seul le portail est redimensionné. Utilisez le retour à 40 % pour terminer
+                        le test ; les 2 réplicas restent demandés jusque-là. Un redéploiement de la stack peut rétablir son nombre initial.</p>
                 </div>
                 <h2>Dernières mesures</h2>
                 <p id="usage-status" role="status">Chargement des mesures…</p>
@@ -235,6 +252,24 @@ if (!isset($csrf)) {
                         maxlength="254"
                         required
                         placeholder="facturation@universite.fr"
+                    />
+                    <label for="admin-email">E-mail du compte admin</label>
+                    <input
+                        id="admin-email"
+                        name="admin-email"
+                        type="email"
+                        maxlength="254"
+                        required
+                        placeholder="admin@universite.fr"
+                    />
+                    <label for="admin-password">Mot de passe du compte admin</label>
+                    <input
+                        id="admin-password"
+                        name="admin-password"
+                        type="password"
+                        minlength="8"
+                        required
+                        autocomplete="new-password"
                     />
                     <button class="button">Déployer la stack</button>
                 </form>

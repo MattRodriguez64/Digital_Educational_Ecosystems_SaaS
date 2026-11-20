@@ -25,9 +25,13 @@ CREATE TABLE tickets (
     status INT DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     created_by VARCHAR(100) NOT NULL,
+    user_id INT NULL,
     university VARCHAR(100),
+    university_slug VARCHAR(128) NULL,
     handled_by VARCHAR(100),
-    solution TEXT
+    handled_by_id VARCHAR(160) NULL,
+    solution TEXT,
+    INDEX idx_tickets_owner (university_slug, user_id)
 );
 
 USE admin_saas;

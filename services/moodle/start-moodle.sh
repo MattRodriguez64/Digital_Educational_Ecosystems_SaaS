@@ -144,4 +144,36 @@ echo "Cours demo pret : $shortname\n";
 MOODLE_DEMO_USERS
 fi
 
+echo "Configuration de la connexion avec les comptes du portail..."
+runuser -u www-data -- php /var/www/html/admin/cli/cfg.php --name=auth --set=db
+runuser -u www-data -- php /var/www/html/admin/cli/cfg.php --component=auth_db --name=type --set=mysqli
+runuser -u www-data -- php /var/www/html/admin/cli/cfg.php --component=auth_db --name=host --set="$MOODLE_DB_HOST"
+runuser -u www-data -- php /var/www/html/admin/cli/cfg.php --component=auth_db --name=name --set=authentification
+runuser -u www-data -- php /var/www/html/admin/cli/cfg.php --component=auth_db --name=user --set="$MOODLE_DB_USER"
+runuser -u www-data -- php /var/www/html/admin/cli/cfg.php --component=auth_db --name=pass --set="$MOODLE_DB_PASSWORD"
+runuser -u www-data -- php /var/www/html/admin/cli/cfg.php --component=auth_db --name=table --set=users
+runuser -u www-data -- php /var/www/html/admin/cli/cfg.php --component=auth_db --name=fielduser --set=email
+runuser -u www-data -- php /var/www/html/admin/cli/cfg.php --component=auth_db --name=fieldpass --set=password_hash
+runuser -u www-data -- php /var/www/html/admin/cli/cfg.php --component=auth_db --name=passtype --set=saltedcrypt
+runuser -u www-data -- php /var/www/html/admin/cli/cfg.php --component=auth_db --name=extencoding --set=utf-8
+runuser -u www-data -- php /var/www/html/admin/cli/cfg.php --component=auth_db --name=field_map_email --set=email
+runuser -u www-data -- php /var/www/html/admin/cli/cfg.php --component=auth_db --name=field_map_firstname --set=username
+runuser -u www-data -- php /var/www/html/admin/cli/cfg.php --component=auth_db --name=field_map_lastname --set=username
+runuser -u www-data -- php /var/www/html/admin/cli/cfg.php --component=auth_db --name=field_updatelocal_email --set=onlogin
+runuser -u www-data -- php /var/www/html/admin/cli/cfg.php --component=auth_db --name=field_updatelocal_firstname --set=onlogin
+runuser -u www-data -- php /var/www/html/admin/cli/cfg.php --component=auth_db --name=field_updatelocal_lastname --set=onlogin
+runuser -u www-data -- php /var/www/html/admin/cli/cfg.php --component=auth_db --name=field_lock_email --set=locked
+runuser -u www-data -- php /var/www/html/admin/cli/cfg.php --component=auth_db --name=field_lock_firstname --set=locked
+runuser -u www-data -- php /var/www/html/admin/cli/cfg.php --component=auth_db --name=field_lock_lastname --set=locked
+
+rm -f /tmp/campus-cron.lock
+
+echo "Démarrage du cron toutes les minutes..."
+(
+    while true; do
+        sleep 60
+        /usr/local/bin/campus-cron.sh &
+    done
+) &
+
 exec docker-php-entrypoint apache2-foreground

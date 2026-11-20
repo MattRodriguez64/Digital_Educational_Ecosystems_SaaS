@@ -4,6 +4,24 @@ set -eu
 occ() { php /var/www/html/occ "$@"; }
 log() { echo "[campus-nextcloud] $*"; }
 
+# Provision only after Nextcloud reports a completed installation.
+status_json=$(occ status --output=json) || {
+    log "Impossible de lire l'etat Nextcloud ; verifier la base et la configuration."
+    exit 1
+}
+installed=$(printf '%s' "$status_json" | php -r '
+    $status = json_decode(stream_get_contents(STDIN), true);
+    if (!is_array($status) || !array_key_exists("installed", $status) || !is_bool($status["installed"])) {
+        fwrite(STDERR, "Reponse occ status invalide\n");
+        exit(1);
+    }
+    echo $status["installed"] ? "yes" : "no";
+') || exit 1
+if [ "$installed" = "no" ]; then
+    log "Installation non terminee : provisioning reporte."
+    exit 0
+fi
+
 i=0
 for domain in ${NEXTCLOUD_TRUSTED_DOMAINS:-}; do
     occ config:system:set trusted_domains "$i" --value="$domain" >/dev/null
@@ -76,6 +94,24 @@ if [ -n "${NEXTCLOUD_DEMO_PASSWORD:-}" ]; then
     ensure_user enseignant1 enseignants "Enseignant Démo" "${NEXTCLOUD_TEACHER_QUOTA:-10 GB}"
     ensure_user etudiant1 etudiants "Étudiant Démo 1" ""
     ensure_user etudiant2 etudiants "Étudiant Démo 2" ""
+fi
+
+if [ -n "${NEXTCLOUD_AUTH_URL:-}" ]; then
+    if occ app:getpath user_external >/dev/null 2>&1; then
+        occ app:enable user_external >/dev/null
+    else
+        if occ app:install user_external >/dev/null 2>&1; then
+            log "Application installée : user_external"
+        else
+            log "ATTENTION : user_external non installée, connexion avec les comptes du portail impossible"
+        fi
+    fi
+
+    if occ app:getpath user_external >/dev/null 2>&1; then
+        backends='[{"class":"\\OCA\\UserExternal\\BasicAuth","arguments":["'"$NEXTCLOUD_AUTH_URL"'"]}]'
+        occ config:system:set user_backends --type=json --value="$backends" >/dev/null
+        log "Connexion avec les comptes du portail activée"
+    fi
 fi
 
 log "Configuration appliquée"

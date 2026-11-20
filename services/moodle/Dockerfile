@@ -16,4 +16,7 @@ RUN mkdir -p /var/www/moodledata && chown -R www-data:www-data /var/www/moodleda
 COPY config.php /var/www/html/config.php
 
 COPY --chmod=755 start-moodle.sh /usr/local/bin/start-moodle.sh
+COPY --chmod=755 campus-cron.sh /usr/local/bin/campus-cron.sh
+COPY sync-teachers.php /usr/local/lib/campus/sync-teachers.php
+RUN sed -i 's/\r$//' /usr/local/bin/start-moodle.sh /usr/local/bin/campus-cron.sh
 ENTRYPOINT ["/usr/local/bin/start-moodle.sh"]

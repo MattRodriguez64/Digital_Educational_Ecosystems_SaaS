@@ -1,146 +1,154 @@
 <?php
-
 session_start();
-// vérification qu'un compte admin est co
+
 if (empty($_SESSION['admin_id'])) {
     header('Location: index.php');
     exit();
 }
 
-// Accès via form avec méthode POST sinon on mets une erreur 405
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
     exit('Méthode interdite');
 }
 
-if (
-    empty($_SESSION['csrf']) ||
-    !is_string($_POST['csrf'] ?? null) ||
-    !hash_equals($_SESSION['csrf'] ?? '', $_POST['csrf'] ?? '')
-) {
+if (!is_string($_SESSION['csrf'] ?? null) || $_SESSION['csrf'] === ''
+    || !is_string($_POST['csrf'] ?? null)
+    || !hash_equals($_SESSION['csrf'], $_POST['csrf'])) {
     http_response_code(403);
     exit('Requête invalide');
 }
 
-// Vérification que les champs pour créer une stack univ-* ne sont pas vides
-if (isset($_POST['univ-name']) && isset($_POST['univ-slug']) && isset($_POST['univ-country'])) {
-    $name = $_POST['univ-name'];
-    $slug = $_POST['univ-slug'];
-    $country = $_POST['univ-country'];
+$name = $_POST['univ-name'] ?? null;
+$slug = $_POST['univ-slug'] ?? null;
+$country = $_POST['univ-country'] ?? null;
+$emailInput = $_POST['billing-email'] ?? null;
+$email = is_string($emailInput) ? filter_var($emailInput, FILTER_VALIDATE_EMAIL) : false;
 
-    $email = filter_var($_POST['billing-email'] ?? '', FILTER_VALIDATE_EMAIL);
-    if (
-        !$email ||
-        strlen($email) > 254 ||
-        !is_string($name) ||
-        trim($name) === '' ||
-        strlen($name) > 180
-    ) {
-        http_response_code(422);
-        exit('Nom ou adresse de facturation invalide.');
-    }
-    // On importe la config de connexion à la DB
-    require __DIR__ . '/config.php';
+if (!is_string($name) || trim($name) === '' || strlen($name) > 180
+    || !is_string($country) || trim($country) === '' || strlen($country) > 100
+    || !$email || strlen($email) > 254
+    || !is_string($slug) || strlen($slug) > 63
+    || !preg_match('/^univ-[a-z0-9]+(?:-[a-z0-9]+)*$/D', $slug)) {
+    http_response_code(422);
+    exit('Paramètres universitaires ou adresse de facturation invalides.');
+}
 
-    // Valider aussi côté serveur pour garantir que la stack apparaît dans la supervision.
-    if (
-        !is_string($slug) ||
-        strlen($slug) > 128 ||
-        !preg_match('/^univ-[a-z0-9]+(?:-[a-z0-9]+)*$/D', $slug)
-    ) {
-        http_response_code(422);
-        exit('Identifiant de stack invalide.');
-    }
-    $domain = $slug . '.localhost';
-    $stackName = $slug;
+$adminEmailInput = $_POST['admin-email'] ?? null;
+$adminEmail = is_string($adminEmailInput) ? filter_var(strtolower(trim($adminEmailInput)), FILTER_VALIDATE_EMAIL) : false;
+$adminPassword = $_POST['admin-password'] ?? null;
+if (!$adminEmail || strlen($adminEmail) > 254 || !is_string($adminPassword) || strlen($adminPassword) < 8) {
+    http_response_code(422);
+    exit('E-mail ou mot de passe admin invalide (8 caractères minimum).');
+}
 
-    // Lire le template (IMPOORTANT : de mettre le chemin absolu)
-    $template = file_get_contents(dirname(__DIR__) . '/templates/compose.yaml');
+$name = trim($name);
+$country = trim($country);
+require __DIR__ . '/config.php';
+require_once __DIR__ . '/portainer.php';
 
-    if ($template === false) {
-        http_response_code(500);
-        exit('Template introuvable');
+$accepted = false;
+try {
+    $suffix = strtolower(trim(portainerRequiredEnv('CAMPUS_BASE_DOMAIN'), '. '));
+    if (strlen($suffix) > 180
+        || !preg_match('/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)*[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/D', $suffix)) {
+        throw new RuntimeException('CAMPUS_BASE_DOMAIN invalide');
     }
 
-    // Lire le SQL Nextcloud et y insérer un mot de passe propre à l'université.
-    // Hexadécimal : sans apostrophe, donc sans risque dans la requête SQL.
-    $nextcloudDbPassword = bin2hex(random_bytes(16));
-    $nextcloudSql = file_get_contents(dirname(__DIR__) . '/templates/nextcloud.sql');
-
-    if ($nextcloudSql === false) {
-        http_response_code(500);
-        exit('SQL Nextcloud introuvable');
+    $domain = $slug . '.' . $suffix;
+    if (strlen('nextcloud.' . $domain) > 253) {
+        throw new RuntimeException('Domaine universitaire trop long');
     }
-    $nextcloudSql = strtr($nextcloudSql, ['{{NEXTCLOUD_DB_PASSWORD}}' => $nextcloudDbPassword]);
 
-    // Le SQL multiligne doit rester dans le YAML : Portainer écrit Env dans stack.env.
-    $template = str_replace('${NEXTCLOUD_DB_SQL}', json_encode($nextcloudSql, JSON_THROW_ON_ERROR), $template);
+    $port = getenv('PUBLIC_PORT') ?: '18081';
+    if (!ctype_digit($port) || (int) $port < 1 || (int) $port > 65535) {
+        throw new RuntimeException('PUBLIC_PORT invalide');
+    }
 
-    // Paramètres de Portainer
-    $portainerUrl = rtrim(getenv('PORTAINER_URL'), '/');
-    $apiKey = getenv('PORTAINER_API_KEY');
-    $endpointId = getenv('PORTAINER_ENDPOINT_ID');
+    // Un fichier distinct conserve le modèle Compose historiqu
+    $templatePath = dirname(__DIR__) . '/templates/swarm.yml';
+    if (!is_file($templatePath) || !is_readable($templatePath)) {
+        throw new RuntimeException('Modèle Swarm absent : templates/swarm.yml');
+    }
 
-    // Création du payload pour l'API Portainer.
-    // Le même modèle peut ainsi servir à déployer plusieurs stacks.
-    $data = [
-        'Name' => $stackName, // Nom de la stack, par convention du projet : univ-*
-        'StackFileContent' => $template, // Fichier de config template
-        'Env' => [ // toutes les variables d'environnements nécessaire à la stack
-            ['name' => 'DB_ROOT_PASSWORD', 'value' => 'moodle'],
-            ['name' => 'DB_PASSWORD', 'value' => 'moodle'],
-            ['name' => 'DB_USER', 'value' => 'moodle'],
-            ['name' => 'DB_NAME', 'value' => 'moodle'],
-            ['name' => 'MOODLE_ADMIN_PASSWORD', 'value' => 'Admin-Campus-2026'],
-            ['name' => 'MOODLE_DEMO_PASSWORD', 'value' => 'Demo-Campus-2026'],
-            ['name' => 'UNIV_SLUG', 'value' => $slug],
-            ['name' => 'UNIV_DOMAIN', 'value' => $domain],
-            ['name' => 'UNIV_NAME', 'value' => $name],
-            ['name' => 'UNIV_COUNTRY', 'value' => $country],
-            ['name' => 'NEXTCLOUD_DB_PASSWORD', 'value' => $nextcloudDbPassword],
-            ['name' => 'NEXTCLOUD_ADMIN_PASSWORD', 'value' => 'Admin-Campus-2026'],
-            ['name' => 'NEXTCLOUD_DEMO_PASSWORD', 'value' => 'Demo-Campus-2026']
-        ]
+    $template = file_get_contents($templatePath);
+    if ($template === false || trim($template) === '') {
+        throw new RuntimeException('Modèle Swarm vide ou illisible');
+    }
+
+    $publicSuffix = (int) $port === 80 ? '' : ':' . $port;
+    $kibana = (static fn() => require __DIR__ . '/kibana-links.php')();
+
+    $endpointId = portainerRequiredEnv('PORTAINER_ENDPOINT_ID');
+    $swarmId = portainerSwarmId($endpointId);
+    // Mots de passe SQL propres à chaque nouvelle université
+    // Le futur modèle Swarm prépare Nextcloud avec son hook prepare-db.php
+    $values = [
+        'DB_ROOT_PASSWORD' => bin2hex(random_bytes(24)),
+        'DB_PASSWORD' => bin2hex(random_bytes(24)),
+        'DB_USER' => 'moodle',
+        'DB_NAME' => 'moodle',
+        'MOODLE_ADMIN_PASSWORD' => portainerRequiredEnv('MOODLE_ADMIN_PASSWORD'),
+        'MOODLE_DEMO_PASSWORD' => getenv('MOODLE_DEMO_PASSWORD') ?: '',
+        'UNIV_SLUG' => $slug,
+        'UNIV_DOMAIN' => $domain,
+        'UNIV_NAME' => $name,
+        'UNIV_COUNTRY' => $country,
+        'PUBLIC_PORT' => $port,
+        'DATA_NODE_HOSTNAME' => portainerRequiredEnv('DATA_NODE_HOSTNAME'),
+        'NEXTCLOUD_DB_PASSWORD' => bin2hex(random_bytes(24)),
+        'NEXTCLOUD_ADMIN_USER' => getenv('NEXTCLOUD_ADMIN_USER') ?: 'admin',
+        'NEXTCLOUD_ADMIN_PASSWORD' => portainerRequiredEnv('NEXTCLOUD_ADMIN_PASSWORD'),
+        'NEXTCLOUD_DEMO_PASSWORD' => portainerRequiredEnv('NEXTCLOUD_DEMO_PASSWORD'),
+        'SUPPORT_SECRET' => getenv('SUPPORT_SECRET') ?: '',
+        'SUPPORT_URL' => 'http://support.' . $suffix . $publicSuffix,
+        'KIBANA_URL' => $kibana['kibana_url'] ?? '',
+        'ADMIN_EMAIL' => $adminEmail,
+        'ADMIN_PASSWORD_HASH_B64' => base64_encode(password_hash($adminPassword, PASSWORD_DEFAULT)),
     ];
 
-    // Appeler l'API de Portainer
-    $url =
-        $portainerUrl .
-        '/api/stacks/create/standalone/string?endpointId=' .
-        rawurlencode($endpointId);
-
-    $ch = curl_init($url);
-
-    // Envoyer les paramètres en JSON et attendre la réponse avant d’enregistrer le contact.
-    curl_setopt_array($ch, [
-        CURLOPT_POST => true,
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_HTTPHEADER => ['X-API-Key: ' . $apiKey, 'Content-Type: application/json'],
-        CURLOPT_POSTFIELDS => json_encode($data, JSON_THROW_ON_ERROR),
-        CURLOPT_TIMEOUT => 120,
-
-        // Le Portainer local utilise un certificat autosigné.
-        CURLOPT_SSL_VERIFYPEER => false,
-        CURLOPT_SSL_VERIFYHOST => 0
-    ]);
-
-    $response = curl_exec($ch);
-    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-
-    curl_close($ch);
-
-    if ($response === false || $httpCode < 200 || $httpCode >= 300) {
-        $_SESSION['dashboard_notice'] = 'Échec du déploiement (Portainer HTTP ' . $httpCode . ').';
-        header('Location: dashboard.php#deploiement', true, 303);
-        exit();
+    $env = [];
+    foreach ($values as $key => $value) {
+        $env[] = ['name' => $key, 'value' => $value];
     }
 
-    // Le contact appartient à l'administration, pas aux variables des conteneurs universitaires.
+    [$httpCode, $response] = portainerRequest(
+        'stacks/create/swarm/string?endpointId=' . rawurlencode($endpointId),
+        'POST',
+        [
+            'Name' => $slug,
+            'SwarmID' => $swarmId,
+            'StackFileContent' => $template,
+            'Env' => $env,
+        ]
+    );
+
+    if ($httpCode < 200 || $httpCode >= 300) {
+        // Ne pas afficher la réponse brute : elle peut contenir des identifiants
+        throw new RuntimeException('Déploiement refusé par Portainer (HTTP ' . $httpCode . ').');
+    }
+
+    $accepted = true;
     $mysqli->execute_query(
         'INSERT INTO billing_contacts (slug,name,email) VALUES (?,?,?) ON DUPLICATE KEY UPDATE name=VALUES(name), email=VALUES(email)',
         [$slug, $name, $email]
     );
-    $_SESSION['dashboard_notice'] = 'Déploiement demandé : ' . $stackName . ' · ' . $domain;
+
+    $_SESSION['dashboard_notice'] = 'Déploiement Swarm demandé : ' . $slug .
+        ' · ' . $domain . ':' . $port . ' (initialisation en cours).';
     header('Location: dashboard.php#universites', true, 303);
-    exit();
+} catch (Throwable $error) {
+    if ($accepted) {
+        $_SESSION['dashboard_notice'] =
+            'Stack acceptée par Portainer, mais contact de facturation non enregistré. ' .
+            'Ne pas relancer la création ; vérifier la facturation.';
+    } else {
+        // Seuls les messages RuntimeException contrôlés sont affichés
+        $_SESSION['dashboard_notice'] = $error instanceof RuntimeException
+            ? $error->getMessage()
+            : 'Erreur de préparation du déploiement. Vérifier la configuration.';
+    }
+
+    header('Location: dashboard.php#deploiement', true, 303);
 }
+
+exit();

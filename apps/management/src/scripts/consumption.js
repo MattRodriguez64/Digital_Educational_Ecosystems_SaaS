@@ -6,9 +6,11 @@
     const format = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 2 });
     let samples = [];
     let dashboards = {};
+    let kibanaUrl = null;
     let pending = false;
 
     function updateLinks() {
+        period.disabled = !kibanaUrl;
         // La période et la sélection accompagnent l’administrateur dans les deux dashboards.
         const query = campus.value ? 'university: "' + campus.value + '"' : '';
         const global =
@@ -19,14 +21,14 @@
             ['network-link', 'campus-network'],
         ]) {
             const id = dashboards[key];
-            if (!id) {
+            if (!id || !kibanaUrl) {
                 document.getElementById(link).removeAttribute('href');
-                document.getElementById(link).title = 'En attente de Kibana';
+                document.getElementById(link).title = 'Tableaux de bord Kibana non configurés';
                 continue;
             }
             document.getElementById(link).removeAttribute('title');
             document.getElementById(link).href =
-                'http://localhost:5601/app/dashboards#/view/' +
+                kibanaUrl.replace(/\/$/, '') + '/app/dashboards#/view/' +
                 id +
                 '?_g=' +
                 encodeURIComponent(global) +
@@ -51,6 +53,16 @@
                 row.insertCell().textContent =
                     sample[key] == null ? '—' : format.format(sample[key]) + ' ' + unit;
             }
+            const coverage = {
+                stopped: 'Université arrêtée',
+                waiting: 'En attente de tâches actives',
+                incomplete: 'Mesure incomplète : nœud absent, relevé ancien ou tâche remplacée',
+                warming: 'Premier relevé · calcul des débits en cours',
+            }[sample.coverage];
+            if (coverage) {
+                row.insertCell().textContent = coverage;
+                continue;
+            }
             const time = new Date(sample['@timestamp']);
             const stale = Date.now() - time.getTime() > 90000;
             row.insertCell().textContent = stale
@@ -73,17 +85,20 @@
             const data = await response.json();
             samples = data.samples;
             dashboards = data.dashboards;
+            kibanaUrl = data.kibana_url;
             const selected = campus.value;
             campus.replaceChildren(new Option('Toutes les universités', ''));
             for (const sample of samples)
                 campus.add(new Option(sample.university, sample.university));
             if (samples.some((sample) => sample.university === selected)) campus.value = selected;
             status.textContent = samples.length
-                ? 'Relevés Docker · Actualisation toutes les 30 s'
+                ? 'Relevés Swarm · CPU : 100 % = un cœur · Actualisation toutes les 30 s'
                 : 'En attente des premiers relevés universitaires.';
             render();
         } catch {
-            status.textContent = 'Elasticsearch indisponible. Nouvelle tentative dans 30 s.';
+            samples = samples.map(sample => ({ ...sample, coverage: 'incomplete',
+                cpu_pct: null, memory_mib: null, rx_kib_s: null, tx_kib_s: null }));
+            status.textContent = 'Collecte ou inventaire Swarm indisponible. Nouvelle tentative dans 30 s.';
             render();
         } finally {
             pending = false;

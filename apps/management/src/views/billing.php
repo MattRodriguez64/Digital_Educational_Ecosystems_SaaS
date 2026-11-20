@@ -44,6 +44,7 @@ $rateLabels = [
                 <a href="dashboard.php#universites">▦　Universités</a>
                 <a href="dashboard.php#consommation">◴　Consommation</a>
                 <a href="billing.php" aria-current="page">€　Facturation</a>
+                <a href="tickets.php">✉　Tickets</a>
                 <a href="dashboard.php#deploiement">＋　Déploiement</a>
             </nav>
             <footer>Espace administrateur</footer>

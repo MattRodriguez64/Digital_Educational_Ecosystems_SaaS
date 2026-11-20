@@ -1,0 +1,10 @@
+{
+  "campus-resources": {
+    "id": "a5c8370a-9106-44f6-a339-3c573c4738d1",
+    "file": "campus-resources.json"
+  },
+  "campus-network": {
+    "id": "a5c8370a-9106-44f6-a339-3c573c4738d2",
+    "file": "campus-network.json"
+  }
+}

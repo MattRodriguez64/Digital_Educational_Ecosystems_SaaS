@@ -1,10 +1,6 @@
 <?php
 
-// en attendant de voir pour l'authent
-$est_admin = true;
-$utilisateur = 'admin';
-$universite = 'Université de Pau -UPPA';
-//
+require __DIR__ . '/session.php';
 
 $pdo = new PDO('mysql:host=mariadb;dbname=support;charset=utf8mb4', 'support', 'support');
 $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
@@ -44,13 +40,9 @@ if ($est_admin && $action === 'pdf') {
     }
 
 
-    $uni = $_GET['universite'] ?? '';
-    $where = '';
-    $params = [];
-    if ($uni !== '') {
-        $where = 'WHERE university = ?';
-        $params[] = $uni;
-    }
+    $uni = $universite;
+    $where = 'WHERE university_slug = ?';
+    $params = [$slug];
 
     
     $st = compter($pdo, 'status', $where, $params);
@@ -84,14 +76,6 @@ if ($est_admin && $action === 'pdf') {
     ]);
     section($pdf, 'Par catégorie', $ca);
 
-    if ($uni === '') {
-        $pu = [];
-        foreach (compter($pdo, 'university', $where, $params) as $nom => $nombre) {
-            $pu[$nom !== '' ? $nom : 'Non renseignée'] = $nombre;
-        }
-        section($pdf, 'Par université', $pu);
-    }
-
     $pdf->SetFont('Helvetica', 'B', 13);
     $pdf->Cell(0, 9, latin('Liste des tickets'), 0, 1);
     $pdf->SetFont('Helvetica', 'B', 10);
@@ -119,8 +103,8 @@ if ($action) {
     header('Content-Type: application/json');
 
     if ($action === 'mes_tickets') {
-        $stmt = $pdo->prepare('SELECT * FROM tickets WHERE created_by = ? ORDER BY created_at DESC');
-        $stmt->execute([$utilisateur]);
+        $stmt = $pdo->prepare('SELECT * FROM tickets WHERE user_id = ? AND university_slug = ? ORDER BY created_at DESC');
+        $stmt->execute([$user_id, $slug]);
         echo json_encode($stmt->fetchAll(PDO::FETCH_ASSOC));
     } elseif ($action === 'creer') {
 
@@ -131,18 +115,17 @@ if ($action) {
             exit;
 
         }
-        $stmt = $pdo->prepare('INSERT INTO tickets (uuid, title, category, priority, description, created_by, university) VALUES (UUID(), ?, ?, ?, ?, ?, ?)');
-        $stmt->execute([$titre, $_POST['category'], $_POST['priority'], $description, $utilisateur, $universite]);
+        $stmt = $pdo->prepare('INSERT INTO tickets (uuid, title, category, priority, description, created_by, user_id, university, university_slug) VALUES (UUID(), ?, ?, ?, ?, ?, ?, ?, ?)');
+        $stmt->execute([$titre, $_POST['category'], $_POST['priority'], $description, $utilisateur, $user_id, $universite, $slug]);
         echo json_encode(['ok' => true]);
 
     } elseif ($est_admin && $action === 'filtres') {
-        echo json_encode([
-            'users' => $pdo->query('SELECT DISTINCT created_by FROM tickets ORDER BY created_by')->fetchAll(PDO::FETCH_COLUMN),
-            'universites' => $pdo->query('SELECT DISTINCT university FROM tickets WHERE university IS NOT NULL ORDER BY university')->fetchAll(PDO::FETCH_COLUMN),
-        ]);
+        $stmt = $pdo->prepare('SELECT DISTINCT created_by FROM tickets WHERE university_slug = ? ORDER BY created_by');
+        $stmt->execute([$slug]);
+        echo json_encode(['users' => $stmt->fetchAll(PDO::FETCH_COLUMN)]);
     } elseif ($est_admin && $action === 'tous') {
-        $sql = 'SELECT * FROM tickets WHERE 1 = 1';
-        $params = [];
+        $sql = 'SELECT * FROM tickets WHERE university_slug = ?';
+        $params = [$slug];
         if (!empty($_GET['date'])) {
             $sql .= ' AND DATE(created_at) = ?';
             $params[] = $_GET['date'];
@@ -152,26 +135,21 @@ if ($action) {
             $sql .= ' AND created_by = ?';
             $params[] = $_GET['user'];
         }
-
-        if (!empty($_GET['universite'])) {
-            $sql .= ' AND university = ?';
-            $params[] = $_GET['universite'];
-        }
         $stmt = $pdo->prepare($sql . ' ORDER BY status = 2, created_at DESC');
         $stmt->execute($params);
 
         echo json_encode($stmt->fetchAll(PDO::FETCH_ASSOC));
     } elseif ($est_admin && $action === 'prendre') {
-        $stmt = $pdo->prepare('UPDATE tickets SET status = 1, handled_by = ? WHERE uuid = ? AND status IN (0, 1)');
-        $stmt->execute([$utilisateur, $_POST['uuid']]);
+        $stmt = $pdo->prepare('UPDATE tickets SET status = 1, handled_by = ?, handled_by_id = ? WHERE uuid = ? AND university_slug = ? AND status IN (0, 1)');
+        $stmt->execute([$utilisateur, $handler_id, $_POST['uuid'], $slug]);
 
         echo json_encode(['ok' => true]);
     } elseif ($est_admin && $action === 'traiter') {
-        $stmt = $pdo->prepare('SELECT status, handled_by FROM tickets WHERE uuid = ?');
-        $stmt->execute([$_POST['uuid']]);
+        $stmt = $pdo->prepare('SELECT status, handled_by_id FROM tickets WHERE uuid = ? AND university_slug = ?');
+        $stmt->execute([$_POST['uuid'], $slug]);
         $ticket = $stmt->fetch(PDO::FETCH_ASSOC);
 
-        if (!$ticket || $ticket['status'] != 1 || $ticket['handled_by'] !== $utilisateur) {
+        if (!$ticket || $ticket['status'] != 1 || $ticket['handled_by_id'] !== $handler_id) {
             echo json_encode(['ok' => false, 'erreur' => 'Ce ticket n\'est pas pris en charge par vous!.']);
             exit;
         }
@@ -182,8 +160,8 @@ if ($action) {
             echo json_encode(['ok' => false, 'erreur' => 'Une solution est obligatoire pour clôturer.']);
             exit;
         }
-        $stmt = $pdo->prepare('UPDATE tickets SET solution = ?, status = ? WHERE uuid = ?');
-        $stmt->execute([$solution, $status, $_POST['uuid']]);
+        $stmt = $pdo->prepare('UPDATE tickets SET solution = ?, status = ? WHERE uuid = ? AND university_slug = ?');
+        $stmt->execute([$solution, $status, $_POST['uuid'], $slug]);
 
         echo json_encode(['ok' => true]);
     } else {
@@ -208,7 +186,7 @@ if ($action) {
         <span class="navbar-brand">Support</span>
         <div class="d-flex align-items-center">
             <a href="sla.php" class="btn btn-outline-light btn-sm mr-3" id="btn-sla">SLA</a>
-            <a href="http://localhost" class="navbar-text"><?= htmlspecialchars($utilisateur . ($est_admin ? ' (admin)' : '')) ?></a>
+            <a href="<?= htmlspecialchars($portail) ?>" class="navbar-text"><?= htmlspecialchars($utilisateur . ($est_admin ? ' (admin)' : '') . ' · ' . $universite) ?></a>
         </div>
     </nav>
 
@@ -274,19 +252,13 @@ if ($action) {
                             <label>Date</label>
                             <input type="date" class="form-control" id="filtre-date" value="<?= date('Y-m-d') ?>">
                         </div>
-                        <div class="col-md-4">
+                        <div class="col-md-7">
                             <label>Utilisateur</label>
                             <select class="form-control" id="filtre-user">
                                 <option value="">Tous</option>
                             </select>
                         </div>
-                        <div class="col-md-4">
-                            <label>Université</label>
-                            <select class="form-control" id="filtre-universite">
-                                <option value="">Toutes</option>
-                            </select>
-                        </div>
-                        <div class="col-md-1 d-flex align-items-end">
+                        <div class="col-md-2 d-flex align-items-end">
                             <button class="btn btn-secondary btn-block" id="filtre-reset">Reset</button>
                         </div>
                     </div>
@@ -303,10 +275,7 @@ if ($action) {
                             <button class="close text-white" data-dismiss="modal">&times;</button>
                         </div>
                         <div class="modal-body">
-                            <label>Périmètre du rapport</label>
-                            <select class="form-control" id="pdf-universite">
-                                <option value="">Global</option>
-                            </select>
+                            <p class="mb-0">Rapport des tickets de <?= htmlspecialchars($universite) ?>.</p>
                         </div>
                         <div class="modal-footer">
                             <button class="btn btn-dark" data-dismiss="modal">Fermer</button>
@@ -341,7 +310,7 @@ if ($action) {
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         const estAdmin = <?= $est_admin ? 'true' : 'false' ?>;
-        const utilisateur = <?= json_encode($utilisateur) ?>;
+        const handlerId = <?= json_encode($handler_id) ?>;
         const statuts = ['Ouvert', 'En cours', 'Clôturé'];
         const couleurs = ['badge-danger', 'badge-warning', 'badge-success'];
         let mesTickets = [];
@@ -414,7 +383,7 @@ if ($action) {
                 return `<button class="btn btn-primary" onclick="prendre(${i})">Prendre en charge</button>`;
             }
 
-            if (t.status == 1 && t.handled_by === utilisateur) {
+            if (t.status == 1 && t.handled_by_id === handlerId) {
                 return `
                     <textarea class="form-control mb-2" id="solution-${i}" rows="3" placeholder="Solution">${esc(t.solution)}</textarea>
                     <button class="btn btn-dark" onclick="traiter(${i}, 1)">Enregistrer</button>
@@ -497,22 +466,17 @@ if ($action) {
             const r = await fetch('?action=filtres');
             const filtres = await r.json();
             remplir('filtre-user', filtres.users, 'Tous');
-            remplir('filtre-universite', filtres.universites, 'Toutes');
-            remplir('pdf-universite', filtres.universites, 'Global');
         }
 
         function genererPdf() {
-
-            const universite = document.getElementById('pdf-universite').value;
-            window.open('?action=pdf&universite=' + encodeURIComponent(universite), '_blank');
+            window.open('?action=pdf', '_blank');
         }
 
         async function chargerAdmin() {
 
             const params = new URLSearchParams({
                 date: document.getElementById('filtre-date').value,
-                user: document.getElementById('filtre-user').value,
-                universite: document.getElementById('filtre-universite').value
+                user: document.getElementById('filtre-user').value
             });
             const url = '?action=tous&' + params;
             const r = await fetch(url);
@@ -534,13 +498,12 @@ if ($action) {
 
         if (estAdmin) {
             
-            ['filtre-date', 'filtre-user', 'filtre-universite'].forEach(id => {
+            ['filtre-date', 'filtre-user'].forEach(id => {
                 document.getElementById(id).addEventListener('change', chargerAdmin);
             });
             document.getElementById('filtre-reset').addEventListener('click', () => {
                 document.getElementById('filtre-date').value = new Date().toLocaleDateString('sv-SE');
                 document.getElementById('filtre-user').value = '';
-                document.getElementById('filtre-universite').value = '';
                 chargerAdmin();
             });
         }

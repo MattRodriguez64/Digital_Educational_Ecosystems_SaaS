@@ -6,14 +6,26 @@ services:
       UNIV_DOMAIN: ${UNIV_DOMAIN}
       UNIV_NAME: ${UNIV_NAME}
       UNIV_COUNTRY: ${UNIV_COUNTRY}
+      UNIV_SLUG: ${UNIV_SLUG}
+      SUPPORT_SECRET: ${SUPPORT_SECRET}
+      DB_HOST: db-${UNIV_SLUG}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+    depends_on:
+      mariadb:
+        condition: service_healthy
     labels:
       - traefik.enable=true
+      - traefik.docker.network=proxy
       - traefik.http.routers.portail-${UNIV_SLUG}.rule=Host(`moncompte.${UNIV_DOMAIN}`) || Host(`${UNIV_DOMAIN}`)
       - traefik.http.routers.portail-${UNIV_SLUG}.entrypoints=web
       - traefik.http.routers.portail-${UNIV_SLUG}.service=portail-${UNIV_SLUG}
       - traefik.http.services.portail-${UNIV_SLUG}.loadbalancer.server.port=80
     networks:
-      - proxy
+      proxy:
+      backend:
+        aliases:
+          - "portail-${UNIV_SLUG}"
 
   support:
     image: digital-campus-support:v1
@@ -77,6 +89,7 @@ services:
       NEXTCLOUD_TEACHER_QUOTA: 200 MB
       NEXTCLOUD_COURSE_FOLDER_QUOTA: 300 MB
       NEXTCLOUD_TEACHER_FOLDER_QUOTA: 100 MB
+      NEXTCLOUD_AUTH_URL: http://portail-${UNIV_SLUG}/auth-nextcloud.php
     volumes:
       - nextcloud_html:/var/www/html
       - nextcloud_data:/var/www/html/data
@@ -140,6 +153,8 @@ services:
     configs:
       - source: nextcloud_db
         target: /docker-entrypoint-initdb.d/20-nextcloud.sql
+      - source: auth_db
+        target: /docker-entrypoint-initdb.d/30-auth.sql
     healthcheck:
       test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
       interval: 10s
@@ -167,3 +182,5 @@ volumes:
 configs:
   nextcloud_db:
     content: ${NEXTCLOUD_DB_SQL}
+  auth_db:
+    content: ${AUTH_DB_SQL}

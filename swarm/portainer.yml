@@ -1,0 +1,38 @@
+version: "3.8"
+
+services:
+  portainer:
+    image: portainer/portainer-ce:lts
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - portainer_data:/data
+    networks:
+      - proxy-swarm
+    deploy:
+      replicas: 1
+      endpoint_mode: dnsrr
+      placement:
+        constraints:
+          - node.role == manager
+      labels:
+        - "traefik.enable=true"
+        - "traefik.swarm.network=proxy-swarm"
+        - "traefik.http.routers.campus-portainer.rule=Host(`portainer.${CAMPUS_BASE_DOMAIN:-10.3.17.216.sslip.io}`)"
+        - "traefik.http.routers.campus-portainer.entrypoints=web"
+        - "traefik.http.routers.campus-portainer.service=campus-portainer"
+        - "traefik.http.services.campus-portainer.loadbalancer.server.port=9000"
+      resources:
+        reservations:
+          memory: 64M
+        limits:
+          memory: 256M
+      restart_policy:
+        condition: any
+        delay: 5s
+
+networks:
+  proxy-swarm:
+    external: true
+
+volumes:
+  portainer_data:

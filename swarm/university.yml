@@ -1,0 +1,201 @@
+version: "3.8"
+
+services:
+  elearn:
+    image: localhost:5000/digital-campus-elearn:swarm-v1
+
+    environment:
+      MOODLE_URL: "http://elearn.univ-demo.10.3.17.216.sslip.io:18081"
+      MOODLE_DB_HOST: db-univ-demo
+      MOODLE_DB_NAME: moodle
+      MOODLE_DB_USER: moodle
+      MOODLE_DB_PASSWORD: ${DB_PASSWORD}
+      MOODLE_ADMIN_PASSWORD: ${MOODLE_ADMIN_PASSWORD}
+
+    volumes:
+      - moodledata:/var/www/moodledata
+
+    networks:
+      - backend
+      - proxy-swarm
+
+    deploy:
+      replicas: 1
+      endpoint_mode: dnsrr
+
+      placement:
+        constraints:
+          - node.labels.campus_data == true
+
+      labels:
+        - "traefik.enable=true"
+        - "traefik.swarm.network=proxy-swarm"
+        - "traefik.http.routers.univ-demo-elearn.rule=Host(`elearn.univ-demo.10.3.17.216.sslip.io`)"
+        - "traefik.http.routers.univ-demo-elearn.entrypoints=web"
+        - "traefik.http.routers.univ-demo-elearn.service=univ-demo-elearn"
+        - "traefik.http.services.univ-demo-elearn.loadbalancer.server.port=80"
+
+      resources:
+        reservations:
+          memory: 128M
+        limits:
+          cpus: "0.50"
+          memory: 512M
+
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+
+  mariadb:
+    image: mariadb:11.4
+
+    environment:
+      MARIADB_DATABASE: moodle
+      MARIADB_USER: moodle
+      MARIADB_PASSWORD: ${DB_PASSWORD}
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+
+    command:
+      - "--character-set-server=utf8mb4"
+      - "--collation-server=utf8mb4_unicode_ci"
+      - "--innodb-buffer-pool-size=128M"
+      - "--max-connections=50"
+
+    volumes:
+      - db_data:/var/lib/mysql
+
+    networks:
+      backend:
+        aliases:
+          - db-univ-demo
+
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+
+    deploy:
+      replicas: 1
+      endpoint_mode: dnsrr
+
+      placement:
+        constraints:
+          - node.labels.campus_data == true
+
+      resources:
+        reservations:
+          memory: 128M
+        limits:
+          cpus: "0.50"
+          memory: 512M
+
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+  nextcloud:
+    image: localhost:5000/digital-campus-nextcloud:swarm-v1
+    environment:
+      TZ: Europe/Paris
+      MYSQL_HOST: db-univ-demo
+      MYSQL_DATABASE: nextcloud
+      MYSQL_USER: nextcloud
+      MYSQL_PASSWORD: ${NEXTCLOUD_DB_PASSWORD}
+      CAMPUS_DB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+
+      NEXTCLOUD_ADMIN_USER: ${NEXTCLOUD_ADMIN_USER}
+      NEXTCLOUD_ADMIN_PASSWORD: ${NEXTCLOUD_ADMIN_PASSWORD}
+      NEXTCLOUD_DEMO_PASSWORD: ${NEXTCLOUD_DEMO_PASSWORD}
+
+      NEXTCLOUD_TRUSTED_DOMAINS: nextcloud.univ-demo.10.3.17.216.sslip.io
+      OVERWRITEHOST: nextcloud.univ-demo.10.3.17.216.sslip.io:18081
+      OVERWRITECLIURL: http://nextcloud.univ-demo.10.3.17.216.sslip.io:18081
+      OVERWRITEPROTOCOL: http
+      TRUSTED_PROXIES: "10.0.0.0/8 172.16.0.0/12 192.168.0.0/16"
+
+      PHP_MEMORY_LIMIT: 512M
+      PHP_UPLOAD_LIMIT: 100M
+      NEXTCLOUD_LOGLEVEL: "1"
+      NEXTCLOUD_DEFAULT_QUOTA: "100 MB"
+      NEXTCLOUD_TEACHER_QUOTA: "200 MB"
+      NEXTCLOUD_COURSE_FOLDER_QUOTA: "300 MB"
+      NEXTCLOUD_TEACHER_FOLDER_QUOTA: "100 MB"
+
+    volumes:
+      - nextcloud_html:/var/www/html
+      - nextcloud_data:/var/www/html/data
+
+    networks:
+      - proxy-swarm
+      - backend
+
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - 'curl -fsS http://localhost/status.php | grep -q ''"installed":true'''
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 10m
+
+    deploy:
+      replicas: 1
+      endpoint_mode: dnsrr
+      placement:
+        constraints:
+          - node.labels.campus_data == true
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+      resources:
+        reservations:
+          memory: 128M
+        limits:
+          cpus: "1.0"
+          memory: 768M
+      labels:
+        - "traefik.enable=true"
+        - "traefik.swarm.network=proxy-swarm"
+        - "traefik.http.routers.univ-demo-nextcloud.rule=Host(`nextcloud.univ-demo.10.3.17.216.sslip.io`)"
+        - "traefik.http.routers.univ-demo-nextcloud.entrypoints=web"
+        - "traefik.http.routers.univ-demo-nextcloud.service=univ-demo-nextcloud"
+        - "traefik.http.services.univ-demo-nextcloud.loadbalancer.server.port=80"
+  nextcloud-cron:
+    image: localhost:5000/digital-campus-nextcloud:swarm-v1
+    entrypoint: /cron.sh
+    environment:
+      TZ: Europe/Paris
+    volumes:
+      - nextcloud_html:/var/www/html
+      - nextcloud_data:/var/www/html/data
+    networks:
+      - backend
+      - proxy-swarm
+    deploy:
+      replicas: 1
+      endpoint_mode: dnsrr
+      placement:
+        constraints:
+          - node.labels.campus_data == true
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+
+networks:
+  backend:
+    driver: overlay
+    attachable: true
+    internal: true
+  proxy-swarm:
+    external: true
+
+volumes:
+  db_data:
+  moodledata:
+  nextcloud_html:
+  nextcloud_data:

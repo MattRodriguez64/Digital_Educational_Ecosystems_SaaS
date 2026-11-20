@@ -1,7 +1,5 @@
 <?php
-//encore une fois : a changé selon la situation tant que j'ai pas l'authent
-$est_admin = true;
-$utilisateur = 'admin';
+require __DIR__ . '/session.php';
 ?>
 <!DOCTYPE html>
 <html lang="fr">
@@ -18,7 +16,7 @@ $utilisateur = 'admin';
         <span class="navbar-brand">Support</span>
         <div class="d-flex align-items-center">
             <a href="index.php" class="btn btn-outline-light btn-sm mr-3">Retour au support</a>
-            <a href="http://localhost" class="navbar-text"><?= htmlspecialchars($utilisateur . ($est_admin ? ' (admin)' : '')) ?></a>
+            <a href="<?= htmlspecialchars($portail) ?>" class="navbar-text"><?= htmlspecialchars($utilisateur . ($est_admin ? ' (admin)' : '')) ?></a>
         </div>
     </nav>
 
